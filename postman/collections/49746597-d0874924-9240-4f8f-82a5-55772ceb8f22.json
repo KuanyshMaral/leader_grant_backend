@@ -1,0 +1,860 @@
+{
+	"info": {
+		"_postman_id": "49746597-d0874924-9240-4f8f-82a5-55772ceb8f22",
+		"name": "Leader_Group Backend",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Auth (Public)",
+			"item": [
+				{
+					"name": "Register",
+					"id": "49746597-4bb6f5ac-7427-4c03-9a8b-83db2c6f5910",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"agent1@test.com\",\n  \"password\": \"password123\",\n  \"role\": \"agent\",\n  \"fio\": \"Тестовый Агент Иванович\",\n  \"phone\": \"+79991234567\",\n  \"referrer_agent_id\": null\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/register",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"register"
+							]
+						},
+						"description": "Регистрация нового Клиента или Агента (DTO: RegisterUserDTO)"
+					},
+					"response": []
+				},
+				{
+					"name": "Login (Get JWT Token)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Token is received\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.token).to.not.be.empty;",
+									"    // Автоматически сохраняем токен в переменную коллекции",
+									"    pm.collectionVariables.set(\"authToken\", jsonData.token);",
+									"});"
+								],
+								"type": "text/javascript",
+								"id": "ac0b5d74-2a49-4d89-9aa5-b706deaa2633"
+							}
+						}
+					],
+					"id": "49746597-d2ef160b-f015-4126-989f-b90d1c098aca",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"agent1@test.com\",\n  \"password\": \"password123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/login",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"login"
+							]
+						},
+						"description": "Получает JWT-токен. Токен будет АВТОМАТИЧЕСКИ сохранен и использован во всех других запросах."
+					},
+					"response": []
+				}
+			],
+			"id": "49746597-55c065d3-c8a9-4b85-8010-63c475c815ff"
+		},
+		{
+			"name": "Profile (User)",
+			"item": [
+				{
+					"name": "Get My Profile",
+					"id": "49746597-5d7ea2a4-2e1d-4622-af34-097cb3382146",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/profile/me",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"profile",
+								"me"
+							]
+						},
+						"description": "Получает информацию о текущем пользователе (из JWT-токена)"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Company Profile (Accreditation Step 1)",
+					"id": "49746597-64552470-9fdc-4eee-88b6-f6a2b6203905",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"inn\": \"7707083893\",\n  \"ogrn\": \"1027700132195\",\n  \"name\": \"ПАО СБЕРБАНК\",\n  \"full_name\": \"ПУБЛИЧНОЕ АКЦИОНЕРНОЕ ОБЩЕСТВО \\\"СБЕРБАНК РОССИИ\\\"\",\n  \"legal_address\": \"г. Москва, ул. Вавилова, д. 19\",\n  \"ceo_fio\": \"Греф Герман Оскарович\",\n  \"tax_system\": \"OSN\",\n  \"requisites\": {\n    \"bik\": \"044525225\",\n    \"checking_account\": \"30301810000006000001\",\n    \"corr_account\": \"30101810400000000225\"\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/profile/company",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"profile",
+								"company"
+							]
+						},
+						"description": "Заполнение данных о компании (DTO: UpdateCompanyProfileDTO)"
+					},
+					"response": []
+				},
+				{
+					"name": "Submit for Accreditation (Step 2)",
+					"id": "49746597-ef8a7a85-7379-491c-b8ee-1c9af2940d1c",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/profile/submit-accreditation",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"profile",
+								"submit-accreditation"
+							]
+						},
+						"description": "Подача на аккредитацию (меняет статус User на 'pending_review')"
+					},
+					"response": []
+				}
+			],
+			"id": "49746597-a30f8ef6-dfd4-4436-898c-24e87c8659e0"
+		},
+		{
+			"name": "Applications",
+			"item": [
+				{
+					"name": "Calculate (Step 1)",
+					"id": "49746597-d3f04b78-095f-49d0-a808-a7c00e9a463b",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"product_type\": \"bank_guarantee\",\n  \"amount\": 150000,\n  \"term_days\": 180,\n  \"product_data\": {\n    \"client_inn\": \"7707083893\",\n    \"procurement_number\": \"0123456789\",\n    \"customer_inn\": \"7710357666\",\n    \"law\": \"44-ФЗ\",\n    \"bg_type\": \"Обеспечение исполнения контракта\",\n    \"has_advance\": false,\n    \"is_closed_tender\": false\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/applications/calculate",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"applications",
+								"calculate"
+							]
+						},
+						"description": "Эндпоинт Калькулятора. Возвращает approved_banks и rejected_banks. (DTO: CalculatorRequestDTO)"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Application (Step 2)",
+					"id": "49746597-61697cd6-3036-494b-81e0-d022ae792ad7",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"client_user_id\": 1,\n  \"product_type\": \"bank_guarantee\",\n  \"amount\": 150000,\n  \"term_days\": 180,\n  \"bank_ids\": [\n    1,\n    2\n  ],\n  \"product_data\": {\n    \"client_inn\": \"7707083893\",\n    \"procurement_number\": \"0123456789\",\n    \"customer_inn\": \"7710357666\",\n    \"law\": \"44-ФЗ\",\n    \"bg_type\": \"Обеспечение исполнения контракта\",\n    \"has_advance\": false,\n    \"is_closed_tender\": false\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/applications",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"applications"
+							]
+						},
+						"description": "Создание заявок (DTO: CreateApplicationDTO)"
+					},
+					"response": []
+				},
+				{
+					"name": "List Applications (with pagination)",
+					"id": "49746597-56d466a8-ead8-4cc2-b3f7-cf9ec53415ee",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/applications?page=1&limit=10",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"applications"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						},
+						"description": "Получает список заявок с пагинацией (DTO: PaginationRequestDTO)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get One Application",
+					"id": "49746597-186c4eaa-b79f-4c1c-909c-952649ea803f",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/applications/1",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"applications",
+								"1"
+							]
+						},
+						"description": "Получает одну заявку (с проверкой прав)"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Application Status",
+					"id": "49746597-6162eb95-25b0-402f-9bf3-4885865edaea",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "PATCH",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"offer_received\",\n  \"offer_data\": {\n    \"rate\": \"2.1%\",\n    \"commission\": 15000\n  },\n  \"rejection_reason\": null\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/applications/1/status",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"applications",
+								"1",
+								"status"
+							]
+						},
+						"description": "Смена статуса (для Админа/Партнера). (DTO: UpdateApplicationStatusDTO)"
+					},
+					"response": []
+				}
+			],
+			"id": "49746597-1224d42c-5301-4ef1-b3f2-de7d4e647747"
+		},
+		{
+			"name": "Chat",
+			"item": [
+				{
+					"name": "Get Chat History",
+					"id": "49746597-969b0d45-c6aa-47fd-87eb-79d42b2a0fb0",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/applications/1/messages",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"applications",
+								"1",
+								"messages"
+							]
+						},
+						"description": "Получает историю чата для Заявки №1 (с фильтрацией по роли)"
+					},
+					"response": []
+				},
+				{
+					"name": "Send Message",
+					"id": "49746597-5fca0732-9820-435b-92eb-252155df2939",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"application_id\": 1,\n  \"body\": \"Здравствуйте, приложил новый документ.\",\n  \"document_id\": null\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/messages",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"messages"
+							]
+						},
+						"description": "Отправка сообщения. (DTO: SendMessageDTO)"
+					},
+					"response": []
+				}
+			],
+			"id": "49746597-50b995d7-8fc6-42eb-8862-93d570c3d91e"
+		},
+		{
+			"name": "Documents",
+			"item": [
+				{
+					"name": "Upload File (Step 1)",
+					"id": "49746597-69cc485a-a11b-4e4a-9690-19923da029c1",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"value": null
+								},
+								{
+									"key": "docType",
+									"value": "chat_file",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/documents/upload",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"documents",
+								"upload"
+							]
+						},
+						"description": "Шаг 1: Загрузка файла. Возвращает document_id, который потом используется в SendMessageDTO или UpdateCompanyProfileDTO."
+					},
+					"response": []
+				}
+			],
+			"id": "49746597-f73a3002-a890-4b18-ad60-01b5d4b30781"
+		},
+		{
+			"name": "Integrations",
+			"item": [
+				{
+					"name": "Get by INN (Checko.ru)",
+					"id": "49746597-b5e8abae-96b8-4231-8d1b-c42523d29595",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/integration/inn/7707083893",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"integration",
+								"inn",
+								"7707083893"
+							]
+						},
+						"description": "Требует CHEKO_API_KEY в .env"
+					},
+					"response": []
+				},
+				{
+					"name": "Get by Tender Number (EIS)",
+					"id": "49746597-ba6abd41-5b93-4411-b65c-892baecc7296",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/integration/tender/01234567890",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"integration",
+								"tender",
+								"01234567890"
+							]
+						},
+						"description": "ЗАГЛУШКА: Заработает, когда EIS_API_KEY будет вставлен в .env"
+					},
+					"response": []
+				}
+			],
+			"id": "49746597-f27be063-635f-4851-a32b-ee7d23b23f1b"
+		},
+		{
+			"name": "Admin: Users",
+			"item": [
+				{
+					"name": "[ADMIN] Get Pending Accreditations",
+					"id": "49746597-897d4220-6baf-42ce-96a3-3f13c0d524a8",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/users/accreditation/pending",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"users",
+								"accreditation",
+								"pending"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "[ADMIN] Approve Accreditation",
+					"id": "49746597-5b3795e7-9ffd-474a-8cc4-57c928e3ea4a",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/users/1/approve-accreditation",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"users",
+								"1",
+								"approve-accreditation"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "[ADMIN] Reject Accreditation",
+					"id": "49746597-a41adb46-dde1-45da-9a01-ec30f70031f4",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"reason\": \"Нечитаемые сканы паспорта\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/users/1/reject-accreditation",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"users",
+								"1",
+								"reject-accreditation"
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"id": "49746597-db2c9aac-f15f-4a71-b6ba-29436bee3715",
+			"description": "Требует JWT-токен Администратора"
+		},
+		{
+			"name": "Admin: Chat Moderation",
+			"item": [
+				{
+					"name": "[ADMIN] Get Pending Messages",
+					"id": "49746597-71978bc2-065c-464c-b244-d43953d22e9c",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/chat/pending",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"chat",
+								"pending"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "[ADMIN] Approve Message",
+					"id": "49746597-bcfc5325-a71f-45c6-be0e-358c3fd3f073",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/chat/messages/1/approve",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"chat",
+								"messages",
+								"1",
+								"approve"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "[ADMIN] Reject Message",
+					"id": "49746597-f4782a7c-2e99-4701-9e86-16ebee5f45eb",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/chat/messages/1/reject",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"chat",
+								"messages",
+								"1",
+								"reject"
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"id": "49746597-4cd773f8-c138-45b9-a06e-1746e3edc408",
+			"description": "Требует JWT-токен Администратора"
+		},
+		{
+			"name": "Admin: Banks",
+			"item": [
+				{
+					"name": "[ADMIN] List Banks",
+					"id": "49746597-14315f31-2c1d-4195-817b-9407f65295e7",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/banks",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"banks"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "[ADMIN] Create Bank",
+					"id": "49746597-09413436-e87e-413e-9915-c82ac9ca10b8",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Сбербанк (Тест)\",\n  \"logo_path\": null,\n  \"conditions\": {\n    \"products\": [\n      \"bank_guarantee\",\n      \"credit\"\n    ],\n    \"stop_factors\": {\n      \"inn_blacklist\": [\n        \"1234567890\"\n      ]\n    },\n    \"laws\": {\n      \"44_fz\": true,\n      \"223_fz\": true\n    },\n    \"limits\": {\n      \"bank_guarantee\": {\n        \"min_amount\": 10000,\n        \"max_amount\": 5000000,\n        \"min_term_days\": 10,\n        \"max_term_days\": 700\n      }\n    },\n    \"tariffs\": {\n      \"bank_guarantee\": {\n        \"rate\": \"2.5%\"\n      }\n    },\n    \"speed\": \"Высокая\"\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/banks",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"banks"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "[ADMIN] Get One Bank",
+					"id": "49746597-32719117-b02b-4200-9759-9055c901ee6a",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/banks/1",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"banks",
+								"1"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "[ADMIN] Update Bank (PUT)",
+					"id": "49746597-56ddc5c7-04a9-4c41-9fb7-71c7fec0454d",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Сбербанк (Обновлено)\",\n  \"logo_path\": \"/logos/sber.png\",\n  \"conditions\": {\n    \"products\": [\n      \"bank_guarantee\"\n    ]\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/banks/1",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"banks",
+								"1"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "[ADMIN] Update Bank Conditions (PATCH)",
+					"id": "49746597-a9803efe-ad7c-4945-b9df-8a793be88c11",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "PATCH",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"products\": [\n    \"bank_guarantee\",\n    \"credit\",\n    \"leasing\"\n  ],\n  \"limits\": {\n    \"bank_guarantee\": {\n      \"min_amount\": 5000\n    }\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/admin/banks/1/conditions",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"banks",
+								"1",
+								"conditions"
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"id": "49746597-79c31ce5-59fe-4ff2-a62a-4aa61d078164",
+			"description": "Требует JWT-токен Администратора"
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{authToken}}",
+				"type": "string"
+			}
+		]
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080"
+		},
+		{
+			"key": "authToken",
+			"value": ""
+		}
+	]
+}
