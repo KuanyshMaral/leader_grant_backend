@@ -19,7 +19,7 @@ class ApiExceptionListener {
 
     public function onKernelException(ExceptionEvent $event): void {
 
-        $exception = $event->getException();
+        $exception = $event->getThrowable();
         $responseBody = [];
         $statusCode = 500;
 

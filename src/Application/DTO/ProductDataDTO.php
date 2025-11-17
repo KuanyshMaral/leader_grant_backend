@@ -41,36 +41,4 @@ class ProductDataDTO {
     // --- Поля для Тендерного сопровождения ---
     public ?string $support_option;     // (Enum: Разовое, Под ключ)
     public ?string $industry;           // Отрасль закупок
-
-    // Конструктор, который безопасно "разбирает" массив
-    public function __construct(array $data) {
-        $this->client_inn = $data['client_inn'] ?? '';
-
-        // БГ и Кредит
-        $this->procurement_number = $data['procurement_number'] ?? null;
-        $this->customer_inn = $data['customer_inn'] ?? null;
-        $this->law = $data['law'] ?? null;
-        $this->bg_type = $data['bg_type'] ?? null;
-        $this->has_advance = $data['has_advance'] ?? null;
-        $this->is_closed_tender = $data['is_closed_tender'] ?? null;
-
-        // Кредит / Лизинг
-        $this->credit_type = $data['credit_type'] ?? null;
-
-        // Факторинг
-        $this->contractor_inn = $data['contractor_inn'] ?? null;
-        $this->factoring_type = $data['factoring_type'] ?? null;
-
-        // ВЭД
-        $this->currency = $data['currency'] ?? null;
-        $this->country = $data['country'] ?? null;
-
-        // Страхование
-        $this->insurance_type = $data['insurance_type'] ?? null;
-        $this->insurance_product = $data['insurance_product'] ?? null;
-
-        // Сопровождение
-        $this->support_option = $data['support_option'] ?? null;
-        $this.industry = $data['industry'] ?? null;
-    }
 }

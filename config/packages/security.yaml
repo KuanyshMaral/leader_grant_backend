@@ -1,29 +1,43 @@
+# config/packages/security.yaml
 security:
-    # https://symfony.com/doc/current/security.html#registering-the-user-hashing-passwords
-    password_hashers:
-        Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface: 'auto'
-    # https://symfony.com/doc/current/security.html#loading-the-user-the-user-provider
+    # --- 1. Наш User Entity ---
     providers:
-        users_in_memory: { memory: null }
+        app_user_provider:
+            entity:
+                class: App\User\Entity\User
+                property: email # Мы логинимся по 'email'
+
+    # --- 2. Как хешировать пароли ---
+    password_hashers:
+        App\User\Entity\User: 'auto'
+
+    # --- 3. Главная логика: ФАЙРВОЛЫ ---
     firewalls:
         dev:
             pattern: ^/(_(profiler|wdt)|css|images|js)/
             security: false
-        main:
-            lazy: true
-            provider: users_in_memory
 
-            # activate different ways to authenticate
-            # https://symfony.com/doc/current/security.html#the-firewall
+        # ПУБЛИЧНЫЙ ФАЙРВОЛ (для логина и регистрации)
+        login:
+            pattern: ^/api/(login|register)
+            stateless: true # Не используем сессии
+            json_login:
+                check_path: /api/login # <--- ЭТОТ РОУТ "ПЕРЕХВАТИТ" JWT-БАНДЛ
+                username_path: email
+                password_path: password
+                success_handler: lexik_jwt_authentication.handler.authentication_success
+                failure_handler: lexik_jwt_authentication.handler.authentication_failure
 
-            # https://symfony.com/doc/current/security/impersonating_user.html
-            # switch_user: true
+        # ЗАЩИЩЕННЫЙ ФАЙРВОЛ (для всего остального API)
+        api:
+            pattern: ^/api
+            stateless: true
+            jwt: ~ # <--- Говорим: "Этот файрвол требует JWT-токен"
 
-    # Easy way to control access for large sections of your site
-    # Note: Only the *first* access control that matches will be used
+    # --- 4. Правила доступа ---
     access_control:
-        # - { path: ^/admin, roles: ROLE_ADMIN }
-        # - { path: ^/profile, roles: ROLE_USER }
+        - { path: ^/api/(login|register), roles: PUBLIC_ACCESS }
+        - { path: ^/api, roles: IS_AUTHENTICATED_FULLY } # <--- Все остальное в /api - только по токену
 
 when@test:
     security:

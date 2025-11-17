@@ -1,4 +1,8 @@
 <?php
+// src/User/DTO/RegisterUserDTO.php
+
+namespace App\User\DTO;
+use Symfony\Component\Validator\Constraints as Assert;
 class RegisterUserDTO {
     /**
      * @Assert\NotBlank(message="Email не может быть пустым")

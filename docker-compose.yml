@@ -1,0 +1,65 @@
+# C:\Users\Maral\PhpstormProjects\leader_grant_backend\docker-compose.yml
+
+services:
+    # 1. СЕРВИС: База данных PostgreSQL
+    db:
+        image: postgres:15-alpine # Используем "легкий" образ Postgres 15
+        restart: unless-stopped
+        environment:
+            # --- ВОТ ВАША "ПРОСТАЯ" КОНФИГУРАЦИЯ ---
+            POSTGRES_DB: ${POSTGRES_DB}
+            POSTGRES_USER: ${POSTGRES_USER}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD} # Используйте более сложный пароль в .env
+            # ---
+        volumes:
+            - db_data:/var/lib/postgresql/data # Сохраняем данные, чтобы они не пропали
+        ports:
+            - "5433:5432" # Снаружи (на C:\Users\...) порт будет 5433, внутри Docker - 5432
+
+    # 2. СЕРВИС: PHP-FPM (Наш Symfony-бэкенд)
+    php:
+        build:
+            context: ./docker/php # Говорим ему взять "рецепт" из папки docker/php
+        restart: unless-stopped
+        volumes:
+            - ./:/var/www/project # "Монтируем" весь ваш код в контейнер
+        environment:
+            # --- И ВОТ "ПРОСТОЕ" ПОДКЛЮЧЕНИЕ ---
+            # Symfony автоматически "подхватит" эту переменную
+            DATABASE_URL: "${DATABASE_URL}"
+            APP_ENV: ${APP_ENV}
+            JWT_PASSPHRASE: ${JWT_PASSPHRASE}
+            # Обратите внимание: хост = 'db' (имя сервиса Postgres выше)
+        depends_on:
+            - db # Не запускать PHP, пока не запустится 'db'
+
+    # 3. СЕРВИС: Nginx (Веб-сервер, который "смотрит" наружу)
+    nginx:
+        image: nginx:1.25-alpine
+        restart: unless-stopped
+        ports:
+            - "8080:80" # Ваш сайт будет доступен на http://localhost:8080
+        volumes:
+            - ./:/var/www/project # Nginx тоже должен "видеть" код (папку public/)
+            - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf # Конфиг Nginx
+        depends_on:
+            - php # Не запускать Nginx, пока не запустится 'php'
+
+    # 4. СЕРВИС: Воркер (Для асинхронных задач, которые мы обсуждали)
+    worker:
+        build:
+            context: ./docker/php
+        restart: unless-stopped
+        command: php bin/console messenger:consume async -vv
+        volumes:
+            - ./:/var/www/project
+        environment:
+            DATABASE_URL: "${DATABASE_URL}"
+            APP_ENV: ${APP_ENV}
+        depends_on:
+            - db
+            - php
+
+# "Именнованный" том для хранения данных БД
+volumes:
+    db_data:

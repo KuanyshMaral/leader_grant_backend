@@ -48,16 +48,4 @@ class CreateApplicationDTO {
      */
     public ProductDataDTO $product_data;
 
-    // Конструктор для удобного создания из Контроллера
-    // (В Laravel/Symfony фреймворк часто делает это сам)
-    public function __construct(array $data) {
-        $this->client_user_id = $data['client_user_id'];
-        $this->product_type = $data['product_type'];
-        $this->amount = (float)$data['amount'];
-        $this->term_days = (int)$data['term_days'];
-        $this->bank_ids = $data['bank_ids'];
-
-        // Вложенный DTO создается из "сырого" массива product_data
-        $this->product_data = new ProductDataDTO($data['product_data'] ?? []);
-    }
 }

@@ -4,6 +4,8 @@
 # Put parameters here that don't need to change on each machine where the app is deployed
 # https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
 parameters:
+    env(CHECKO_API_KEY): ''
+    env(EIS_API_KEY): ''
 
 services:
     # default configuration for services in *this* file
@@ -15,6 +17,24 @@ services:
     # this creates a service per class whose id is the fully-qualified class name
     App\:
         resource: '../src/'
+        exclude:
+            # --- Исключаем ядро и DI ---
+            - '../src/DependencyInjection/'
+            - '../src/Kernel.php'
+
+            # --- Исключаем ВСЕ папки Entity ---
+            - '../src/Application/Entity/'
+            - '../src/Bank/Entity/'
+            - '../src/Chat/Entity/'
+            - '../src/Document/Entity/'
+            - '../src/User/Entity/'
+
+            # --- Исключаем ВСЕ папки DTO ---
+            - '../src/Application/DTO/'
+            - '../src/Chat/DTO/'
+            - '../src/Integration/DTO/'
+            - '../src/Shared/DTO/'
+            - '../src/User/DTO/'
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
@@ -25,3 +45,20 @@ services:
             $isDebug: '%kernel.debug%'    # Внедрить "режим отладки" (true/false)
         tags:
             - { name: kernel.event_listener, event: kernel.exception }
+
+    # 2. Связь для Checko
+    App\Integration\Client\CheckoApiClient:
+        arguments:
+            $checkoApiKey: '%env(CHECKO_API_KEY)%'
+
+    # 3. Связь для ЕИС (Тендеры)
+    App\Integration\Client\TenderApiClient:
+        arguments:
+            $eisApiKey: '%env(EIS_API_KEY)%'
+
+    # "Связываем" абстракцию FilesystemOperator с нашим конкретным хранилищем
+    # для DocumentService
+    App\Document\Service\DocumentService:
+        arguments:
+            # '@default.storage' - это имя сервиса из flysystem.yaml
+            $defaultStorage: '@default.storage'

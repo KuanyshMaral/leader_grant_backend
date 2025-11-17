@@ -1,4 +1,8 @@
 <?php
+// src/Chat/DTO/SendMessageDTO.php
+
+namespace App\Chat\DTO;
+use Symfony\Component\Validator\Constraints as Assert;
 class SendMessageDTO {
     /**
      * @Assert\NotBlank(message="ID заявки обязателен")
