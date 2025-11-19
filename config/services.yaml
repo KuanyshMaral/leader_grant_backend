@@ -35,6 +35,8 @@ services:
             - '../src/Integration/DTO/'
             - '../src/Shared/DTO/'
             - '../src/User/DTO/'
+            - '../src/News/Entity/'
+            - '../src/News/DTO/'
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

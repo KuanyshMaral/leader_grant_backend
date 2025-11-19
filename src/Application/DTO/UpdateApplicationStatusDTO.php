@@ -20,6 +20,14 @@ class UpdateApplicationStatusDTO
      * (Опционально) JSON-поле для оферты, если статус = 'offer_received'
      * @Assert\Type("array")
      */
+
+    // --- Данные Оферты (заполняет Партнер/Админ при статусе offer_received) ---
+
+    #[Assert\PositiveOrZero]
+    public ?float $tariff_rate = null; // %
+
+    #[Assert\PositiveOrZero]
+    public ?float $commission_amount = null; // Рубли
     public ?array $offer_data = null;
 
     /**
@@ -27,4 +35,5 @@ class UpdateApplicationStatusDTO
      * @Assert\Type("string")
      */
     public ?string $rejection_reason = null;
+
 }

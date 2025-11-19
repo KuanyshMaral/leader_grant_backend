@@ -237,8 +237,15 @@ class ApplicationService
         $application->setStatus($dto->status);
 
         // 4. Если пришла оферта, сохраняем ее
-        if ($dto->status === 'offer_received' && $dto->offer_data) {
-            $application->setOfferData($dto->offer_data);
+        if ($dto->status === 'offer_received') {
+            if ($dto->tariff_rate !== null) {
+                $application->setTariffRate($dto->tariff_rate);
+            }
+            if ($dto->commission_amount !== null) {
+                // Преобразуем float в string для decimal
+                $application->setCommissionAmount((string)$dto->commission_amount);
+            }
+            // $application->setOfferData($dto->offer_data); // Если нужно доп. инфо
         }
 
         // 5. Если пришел отказ, сохраняем причину (в product_data)

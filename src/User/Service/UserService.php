@@ -49,6 +49,27 @@ class UserService
         ];
         $company->setRequisites($requisitesArray);
 
+        $company->setKpp($dto->kpp);
+        $company->setActualAddress($dto->actual_address);
+        $company->setOkpo($dto->okpo);
+        $company->setOktmo($dto->oktmo);
+        $company->setOkved($dto->okved);
+
+        // Обработка даты
+        if ($dto->registration_date) {
+            try {
+                $company->setRegistrationDate(new \DateTimeImmutable($dto->registration_date));
+            } catch (\Exception $e) {}
+        }
+
+        // JSON массивы переносим "как есть"
+        $company->setManagement($dto->management);
+        $company->setFounders($dto->founders);
+        $company->setLicenses($dto->licenses);
+        $company->setContactPersons($dto->contact_persons);
+        $company->setEtpAccounts($dto->etp_accounts);
+        $company->setRequisites($dto->requisites);
+
         // 4. Сохраняем
         $this->companyRepository->save($company, true);
 

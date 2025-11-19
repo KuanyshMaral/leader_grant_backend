@@ -20,14 +20,18 @@ class ProductDataDTO {
     public ?string $customer_inn;       // ИНН Заказчика
     public ?string $law;                // (Enum: 44-ФЗ, 223-ФЗ, 185-ФЗ, КБГ)
     public ?string $bg_type;            // (Enum: Обеспечения заявки, ...)
-    public ?bool $has_advance;          // Наличие аванса (галочка)
-    public ?bool $is_closed_tender;     // Закрытый конкурс (галочка)
+    public ?bool $has_advance = false;          // Наличие аванса (галочка)
+    public ?bool $is_closed_tender = false;     // Закрытый конкурс (галочка)
+
+    public bool $is_resecurity = false;        // Является переобеспечением
+    public bool $sole_supplier = false;        // Единственный поставщик
+    public bool $without_eis = false;          // Без размещения в ЕИС
 
     // --- Поля для Корп. кредита / Лизинга ---
     public ?string $credit_type;        // (Enum: Разовый кредит, Возобновляемая линия, ...)
 
     // --- Поля для Факторинга ---
-    public ?string $contractor_inn;     // ИНН контрагента
+    public ?string $contractor_inn = null;     // ИНН контрагента
     public ?string $factoring_type;     // (Enum: Классический, Закрытый, ...)
 
     // --- Поля для ВЭД ---
@@ -41,4 +45,6 @@ class ProductDataDTO {
     // --- Поля для Тендерного сопровождения ---
     public ?string $support_option;     // (Enum: Разовое, Под ключ)
     public ?string $industry;           // Отрасль закупок
+
+
 }

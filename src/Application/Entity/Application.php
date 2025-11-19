@@ -66,6 +66,14 @@ class Application {
     #[Groups(['app:read'])] // <-- ДОБАВИТЬ
     private \DateTime $updated_at;
 
+    #[ORM\Column(type: 'decimal', precision: 15, scale: 2, nullable: true)]
+    #[Groups(['app:read'])]
+    private ?string $commissionAmount = null; // Сумма к оплате (комиссия банка)
+
+    #[ORM\Column(type: 'float', nullable: true)]
+    #[Groups(['app:read'])]
+    private ?float $tariffRate = null; // Тариф в % (например, 2.5)
+
     public function __construct() {
         $this->created_at = new \DateTimeImmutable();
         $this->updated_at = new \DateTime();
@@ -75,6 +83,12 @@ class Application {
     public function onPreUpdate(): void {
         $this->updated_at = new \DateTime();
     }
+
+    public function getCommissionAmount(): ?string { return $this->commissionAmount; }
+    public function setCommissionAmount(?string $commissionAmount): void { $this->commissionAmount = $commissionAmount; }
+
+    public function getTariffRate(): ?float { return $this->tariffRate; }
+    public function setTariffRate(?float $tariffRate): void { $this->tariffRate = $tariffRate; }
 
     public function getId(): int
     {

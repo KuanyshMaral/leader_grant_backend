@@ -80,6 +80,22 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface {
     #[Groups(['app:read'])]
     private \DateTimeImmutable $created_at;
 
+    #[ORM\Column(type: 'json', options: ['default' => '{}'])]
+    #[Groups(['app:read', 'user:write'])]
+    private array $preferences = [];
+
+    #[ORM\Column(type: 'string', length: 10, nullable: true)]
+    #[Groups(['app:read', 'user:read'])]
+    private ?string $gender = null; // 'male', 'female'
+
+    #[ORM\Column(type: 'string', length: 50, nullable: true)]
+    #[Groups(['app:read', 'user:read'])]
+    private ?string $timezone = null; // e.g. 'Europe/Moscow'
+
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
+    #[Groups(['app:read', 'user:read'])]
+    private ?string $avatarPath = null; // Ссылка на фото
+
     public function __construct() {
         $this->created_at = new \DateTimeImmutable();
     }
@@ -221,6 +237,25 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface {
     {
         return $this->email;
     }
+
+    public function getPreferences(): array
+    {
+        return $this->preferences;
+    }
+
+    public function setPreferences(array $preferences): void
+    {
+        $this->preferences = $preferences;
+    }
+
+    public function getGender(): ?string { return $this->gender; }
+    public function setGender(?string $gender): void { $this->gender = $gender; }
+
+    public function getTimezone(): ?string { return $this->timezone; }
+    public function setTimezone(?string $timezone): void { $this->timezone = $timezone; }
+
+    public function getAvatarPath(): ?string { return $this->avatarPath; }
+    public function setAvatarPath(?string $avatarPath): void { $this->avatarPath = $avatarPath; }
 
     /**
      * Метод для очистки временных паролей (нам не нужен).
