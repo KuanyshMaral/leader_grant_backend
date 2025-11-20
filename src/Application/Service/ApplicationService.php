@@ -4,21 +4,21 @@
 namespace App\Application\Service;
 
 use App\Application\DTO\CreateApplicationDTO;
-use App\Application\DTO\UpdateApplicationStatusDTO; // <-- ДОБАВЛЕНО
+use App\Application\DTO\UpdateApplicationStatusDTO;
 use App\Application\Entity\Application;
-use App\Application\Event\ApplicationCreatedEvent; // <-- ДОБАВЛЕНО
-use App\Application\Event\ApplicationStatusChangedEvent; // <-- ДОБАВЛЕНО
+use App\Application\Event\ApplicationCreatedEvent;
+use App\Application\Event\ApplicationStatusChangedEvent;
 use App\Application\Exception\ApplicationAccessDeniedException;
 use App\Application\Exception\ApplicationNotFoundException;
 use App\Application\Repository\ApplicationRepository;
 use App\Bank\Repository\BankRepository;
-use App\Shared\DTO\PaginationRequestDTO; // <-- ДОБАВЛЕНО
+use App\Shared\DTO\PaginationRequestDTO;
 use App\User\Entity\User;
 use App\User\Exception\UserNotFoundException;
 use App\User\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
-use Symfony\Component\Messenger\MessageBusInterface; // <-- ДОБАВЛЕНО
+use Symfony\Component\Messenger\MessageBusInterface;
 
 class ApplicationService
 {
@@ -26,82 +26,85 @@ class ApplicationService
         private readonly ApplicationRepository $applicationRepository,
         private readonly UserRepository $userRepository,
         private readonly BankRepository $bankRepository,
-        private readonly EntityManagerInterface $entityManager, // Нужен для flush()
+        private readonly EntityManagerInterface $entityManager,
         private readonly LoggerInterface $logger,
-        private readonly MessageBusInterface $bus // <-- ИНЪЕКЦИЯ $bus ДОБАВЛЕНА
+        private readonly MessageBusInterface $bus
     ) {
     }
 
     /**
-     * Создает одну или несколько заявок на основе выбора в калькуляторе.
-     * @param User $creator - Тот, кто нажал кнопку (может быть Агентом или самим Клиентом)
-     * @return Application[] - Массив созданных заявок
+     * Создает заявки. + ЛОГИКА КРОСС-ПРОДАЖИ (КРЕДИТ)
+     * @param User $creator
+     * @return Application[]
      */
     public function createApplications(CreateApplicationDTO $dto, User $creator): array
     {
-        // 1. Находим Клиента (от чьего имени заявка)
         $client = $this->userRepository->find($dto->client_user_id);
         if (!$client) {
             throw new UserNotFoundException();
         }
-
-        // 2. Определяем, кто Агент (если он есть)
         $agent = ($creator->getRole() === 'agent') ? $creator : null;
-
-        // (Здесь должна быть проверка, что Агент имеет право подавать за этого Клиента)
 
         $createdApplications = [];
 
-        // 3. Создаем заявки в цикле
-        foreach ($dto->bank_ids as $bankId) {
-            $bank = $this->bankRepository->find($bankId);
-            if (!$bank) {
-                $this->logger->warning('Попытка создать заявку с несуществующим bank_id', ['bank_id' => $bankId]);
-                continue; // Пропускаем этот банк
-            }
+        // 1. Создаем ОСНОВНЫЕ заявки (например, БГ)
+        $mainApps = $this->createApplicationsBatch($dto, $client, $agent);
+        $createdApplications = array_merge($createdApplications, $mainApps);
 
-            $app = new Application();
-            $app->setClientUser($client);
-            $app->setAgentUser($agent); // Может быть null
-            $app->setBank($bank);
+        // 2. ЛОГИКА КРОСС-ПРОДАЖИ: Если это БГ и стоит галочка "Нужен кредит"
+        // (Предполагается, что в ProductDataDTO есть поле need_credit)
+        if ($dto->product_type === 'bank_guarantee' && ($dto->product_data->need_credit ?? false)) {
+            // Создаем дубликаты заявок, но с типом 'credit'
+            // Клонируем DTO и меняем тип
+            $creditDto = clone $dto;
+            $creditDto->product_type = 'credit'; // Меняем тип на Кредит
 
-            $app->setProductType($dto->product_type);
-            $app->setStatus('draft'); // Начальный статус - "Черновик" или "Новая"
-            $app->setAmount($dto->amount);
-            $app->setTermDays($dto->term_days);
+            $creditApps = $this->createApplicationsBatch($creditDto, $client, $agent);
+            $createdApplications = array_merge($createdApplications, $creditApps);
 
-            // Сохраняем все данные из DTO (№ закупки, ИНН заказчика и т.д.)
-            $app->setProductData((array)$dto->product_data);
-
-            $this->applicationRepository->save($app); // Пока без flush()
-            $createdApplications[] = $app;
+            $this->logger->info('Автоматически созданы заявки на Кредит (кросс-продажа)', ['count' => count($creditApps)]);
         }
 
-        // 4. Завершаем транзакцию
         $this->entityManager->flush();
 
-        $this->logger->info('Новые заявки созданы', [
-            'count' => count($createdApplications),
-            'client_id' => $client->getId(),
-            'agent_id' => $agent?->getId(),
-        ]);
-
-        // --- [РЕАЛИЗАЦИЯ ПРОБЕЛА] ---
-        // "Кричим" в очередь, чтобы уведомить Админа
+        // Уведомление админа
         $appIds = array_map(fn($app) => $app->getId(), $createdApplications);
         if (!empty($appIds)) {
             $this->bus->dispatch(new ApplicationCreatedEvent($appIds, $client->getId()));
         }
-        // --- КОНЕЦ ---
 
         return $createdApplications;
     }
 
     /**
-     * Получает одну заявку с проверкой прав доступа.
-     * @throws ApplicationNotFoundException
-     * @throws ApplicationAccessDeniedException
+     * Вспомогательный метод для создания пачки заявок
      */
+    private function createApplicationsBatch(CreateApplicationDTO $dto, User $client, ?User $agent): array
+    {
+        $apps = [];
+        foreach ($dto->bank_ids as $bankId) {
+            $bank = $this->bankRepository->find($bankId);
+            if (!$bank) {
+                $this->logger->warning('Попытка создать заявку с несуществующим bank_id', ['bank_id' => $bankId]);
+                continue;
+            }
+
+            $app = new Application();
+            $app->setClientUser($client);
+            $app->setAgentUser($agent);
+            $app->setBank($bank);
+            $app->setProductType($dto->product_type);
+            $app->setStatus('draft');
+            $app->setAmount($dto->amount);
+            $app->setTermDays($dto->term_days);
+            $app->setProductData((array)$dto->product_data);
+
+            $this->applicationRepository->save($app);
+            $apps[] = $app;
+        }
+        return $apps;
+    }
+
     public function getApplicationForUser(int $applicationId, User $user): Application
     {
         $application = $this->applicationRepository->find($applicationId);
@@ -110,7 +113,6 @@ class ApplicationService
             throw new ApplicationNotFoundException();
         }
 
-        // Проверяем права доступа
         if ($this->canUserView($user, $application)) {
             return $application;
         }
@@ -118,74 +120,69 @@ class ApplicationService
         throw new ApplicationAccessDeniedException();
     }
 
-    /**
-     * Проверяет, имеет ли $user право видеть $application
-     */
     private function canUserView(User $user, Application $application): bool
     {
         $role = $user->getRole();
 
-        if ($role === 'admin') {
-            return true; // Админ видит всё
-        }
-
-        if ($role === 'client' && $application->getClientUser()->getId() === $user->getId()) {
-            return true; // Это заявка самого клиента
-        }
-
-        if ($role === 'agent' && $application->getAgentUser()?->getId() === $user->getId()) {
-            return true; // Это заявка, которую создал агент
-        }
-
-        if ($role === 'partner' && $application->getBank()->getId() === $user->getCompany()?->getId()) {
-            // (Предполагаем, что User-Партнер привязан к Company, а Company.id == Bank.id)
-            // Эту логику нужно будет уточнить, но пока она такая.
-            return true;
-        }
+        if ($role === 'admin') return true;
+        if ($role === 'client' && $application->getClientUser()->getId() === $user->getId()) return true;
+        if ($role === 'agent' && $application->getAgentUser()?->getId() === $user->getId()) return true;
+        if ($role === 'partner' && $application->getBank()->getId() === $user->getCompany()?->getId()) return true;
 
         return false;
     }
 
-    // --- РЕАЛИЗОВАННЫЕ МЕТОДЫ ---
-
     /**
-     * [РЕАЛИЗОВАНО] Получает список заявок для пользователя с пагинацией.
-     * Фильтрует список в зависимости от роли (Клиент, Агент, Партнер, Админ).
-     *
-     * @return array ['data' => Application[], 'total' => int]
+     * [ОБНОВЛЕНО] Получает список заявок с ФИЛЬТРАЦИЕЙ.
+     * Добавлены аргументы $statusFilter и $productFilter
      */
-    public function listForUser(User $user, PaginationRequestDTO $pagination): array
+    public function listForUser(
+        User $user,
+        PaginationRequestDTO $pagination,
+        ?string $statusFilter = null, // 'active', 'rejected', 'archive'
+        ?string $productFilter = null // 'bank_guarantee', 'credit'...
+    ): array
     {
-        // 1. Создаем QueryBuilder БЕЗ пагинации и сортировки
         $qb = $this->applicationRepository->createQueryBuilder('a');
 
-        // 2. Применяем ВСЮ логику фильтрации
+        // 1. Фильтр по Роли
         $role = $user->getRole();
-
         if ($role === 'client') {
-            $qb->andWhere('a.client_user = :user')
-                ->setParameter('user', $user);
+            $qb->andWhere('a.client_user = :user')->setParameter('user', $user);
         } elseif ($role === 'agent') {
-            $qb->andWhere('a.agent_user = :user')
-                ->setParameter('user', $user);
+            $qb->andWhere('a.agent_user = :user')->setParameter('user', $user);
         } elseif ($role === 'partner') {
-            // (Теперь мы используем правильную связь, которую добавили в User.php)
+            // Используем прямую связь User -> Bank
             if ($user->getBank()) {
-                $qb->andWhere('a.bank = :bankId')
-                    ->setParameter('bankId', $user->getBank()->getId());
+                $qb->andWhere('a.bank = :bankId')->setParameter('bankId', $user->getBank()->getId());
             } else {
-                // Партнер не привязан к банку? Возвращаем 0 заявок.
                 $qb->andWhere('1 = 0');
             }
         }
-        // Админ (else) не имеет доп. фильтров - он видит ВСЕ.
 
-        // 3. ПОЛУЧАЕМ TOTAL (до пагинации)
-        // Клонируем $qb, чтобы наш SELECT не "сломал" основной запрос
+        // 2. Фильтр по Статусу (Табы в UI)
+        if ($statusFilter) {
+            if ($statusFilter === 'rejected') {
+                $qb->andWhere('a.status = :st')->setParameter('st', 'rejected');
+            } elseif ($statusFilter === 'archive') {
+                // Архивные - это завершенные или архивированные
+                $qb->andWhere('a.status IN (:sts)')->setParameter('sts', ['completed', 'archived']);
+            } else {
+                // 'active' (Активные) - все, кроме отказа, завершенных и архива
+                $qb->andWhere('a.status NOT IN (:sts)')->setParameter('sts', ['rejected', 'completed', 'archived']);
+            }
+        }
+
+        // 3. Фильтр по Продукту
+        if ($productFilter) {
+            $qb->andWhere('a.product_type = :pt')->setParameter('pt', $productFilter);
+        }
+
+        // Подсчет total
         $countQb = clone $qb;
         $total = $countQb->select('count(a.id)')->getQuery()->getSingleScalarResult();
 
-        // 4. ТЕПЕРЬ применяем пагинацию и сортировку
+        // Пагинация и сортировка
         $qb->orderBy('a.updated_at', 'DESC')
             ->setFirstResult(($pagination->page - 1) * $pagination->limit)
             ->setMaxResults($pagination->limit);
@@ -194,7 +191,7 @@ class ApplicationService
 
         return [
             'data' => $applications,
-            'total' => (int) $total, // Приводим к int
+            'total' => (int) $total,
             'page' => $pagination->page,
             'limit' => $pagination->limit,
         ];
@@ -202,14 +199,11 @@ class ApplicationService
 
     /**
      * [РЕАЛИЗОВАНО] Обновляет статус заявки (для Админов/Партнеров).
-     *
-     * @throws ApplicationNotFoundException
-     * @throws ApplicationAccessDeniedException
      */
     public function updateStatus(
         int $applicationId,
         UpdateApplicationStatusDTO $dto,
-        User $updater // Тот, кто меняет статус
+        User $updater
     ): Application {
 
         $application = $this->applicationRepository->find($applicationId);
@@ -217,10 +211,9 @@ class ApplicationService
             throw new ApplicationNotFoundException();
         }
 
-        // 1. Проверяем права на ИЗМЕНЕНИЕ (только Админ или Партнер этого банка)
+        // 1. Проверяем права на ИЗМЕНЕНИЕ
         $role = $updater->getRole();
-        // TODO: Уточнить логику привязки Партнера к Банку
-        $isPartner = ($role === 'partner' && $application->getBank()->getId() === $updater->getCompany()?->getId());
+        $isPartner = ($role === 'partner' && $updater->getBank() === $application->getBank()); // Используем связь User->Bank
 
         if ($role !== 'admin' && !$isPartner) {
             $this->logger->warning('Попытка сменить статус заявки без прав', [
@@ -229,14 +222,10 @@ class ApplicationService
             throw new ApplicationAccessDeniedException('Только Админ или Партнер банка могут менять статус.');
         }
 
-        // 2. (Опционально) Здесь можно добавить сложную "машину состояний"
-        // (e.g., нельзя перевести из 'draft' в 'completed')
-
-        // 3. Обновляем статус
         $oldStatus = $application->getStatus();
         $application->setStatus($dto->status);
 
-        // 4. Если пришла оферта, сохраняем ее
+        // 4. Если пришла оферта, сохраняем ставку и комиссию
         if ($dto->status === 'offer_received') {
             if ($dto->tariff_rate !== null) {
                 $application->setTariffRate($dto->tariff_rate);
@@ -245,17 +234,20 @@ class ApplicationService
                 // Преобразуем float в string для decimal
                 $application->setCommissionAmount((string)$dto->commission_amount);
             }
-            // $application->setOfferData($dto->offer_data); // Если нужно доп. инфо
+            // Если есть доп. данные оферты
+            if ($dto->offer_data) {
+                $application->setOfferData($dto->offer_data);
+            }
         }
 
-        // 5. Если пришел отказ, сохраняем причину (в product_data)
-        if ($dto->status === 'rejected' && $dto->rejection_reason) {
+        // 5. Если отказ или возврат на доработку
+        if (($dto->status === 'rejected' || $dto->status === 'returned_for_revision') && $dto->rejection_reason) {
             $productData = $application->getProductData();
             $productData['rejection_reason'] = $dto->rejection_reason;
             $application->setProductData($productData);
         }
 
-        $this->applicationRepository->save($application, true); // (flush: true)
+        $this->applicationRepository->save($application, true);
 
         $this->logger->info('Статус заявки обновлен', [
             'app_id' => $application->getId(),
@@ -264,14 +256,12 @@ class ApplicationService
             'new_status' => $dto->status,
         ]);
 
-        // --- [РЕАЛИЗАЦИЯ ПРОБЕЛА] ---
-        // "Кричим" в очередь, чтобы уведомить Клиента/Агента
+        // "Кричим" в очередь
         $this->bus->dispatch(new ApplicationStatusChangedEvent(
             $application->getId(),
             $oldStatus,
             $dto->status
         ));
-        // --- КОНЕЦ ---
 
         return $application;
     }

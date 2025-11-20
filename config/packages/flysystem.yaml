@@ -1,7 +1,9 @@
-# Read the documentation at https://github.com/thephpleague/flysystem-bundle/blob/master/docs/1-getting-started.md
+# config/packages/flysystem.yaml
 flysystem:
     storages:
         default.storage:
             adapter: 'local'
             options:
-                directory: '%kernel.project_dir%/var/storage/default'
+                # Храним файлы ВНЕ папки public, чтобы их нельзя было открыть по прямой ссылке
+                # Это критично для паспортов и уставных документов!
+                directory: '%kernel.project_dir%/var/storage'

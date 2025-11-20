@@ -5,14 +5,13 @@ namespace App\User\Entity;
 
 // 1. ПОДКЛЮЧАЕМ АТРИБУТЫ DOCTRINE
 use Doctrine\ORM\Mapping as ORM;
-use App\User\Repository\UserRepository; // (Мы создадим этот класс позже)
-use Doctrine\Common\Collections\ArrayCollection;
-use Doctrine\Common\Collections\Collection;
+use App\User\Repository\UserRepository;
 use App\Bank\Entity\Bank;
-use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface; // <-- ДОБАВИТЬ
-use Symfony\Component\Security\Core\User\UserInterface; // <-- ДОБАВИТЬ
+use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
+use Symfony\Component\Security\Core\User\UserInterface;
+use Symfony\Component\Serializer\Annotation\Groups;
 
-// 2. ГОВОРИМ DOCTRINE, ЧТО ЭТО СУЩНОСТЬ
+
 #[ORM\Entity(repositoryClass: UserRepository::class)]
 #[ORM\Table(name: '`users`')] // Кавычки нужны, т.к. "user" - ключевое слово в SQL
 class User implements UserInterface, PasswordAuthenticatedUserInterface {
@@ -22,7 +21,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface {
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column(type: 'integer')]
-    #[Groups(['app:read'])]
+    #[Groups(['app:read', 'chat:read'])]
     private int $id;
 
     #[ORM\Column(type: 'string', length: 255, unique: true)]
@@ -30,19 +29,18 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface {
     private string $email;
 
     #[ORM\Column(type: 'string', length: 255)]
-    #[Groups(['app:read'])]
     private string $password_hash;
 
     #[ORM\Column(type: 'string', length: 20)]
-    #[Groups(['app:read'])]
-    private string $role; // (Enum: 'client', 'agent', 'partner', 'admin')
+    #[Groups(['app:read', 'chat:read'])]
+    private string $role;
 
     #[ORM\Column(type: 'string', length: 30)]
     #[Groups(['app:read'])]
-    private string $status; // (Enum: 'pending_accreditation', 'active', 'rejected')
+    private string $status;
 
     #[ORM\Column(type: 'string', length: 255)]
-    #[Groups(['app:read'])]
+    #[Groups(['app:read', 'chat:read'])]
     private string $fio;
 
     #[ORM\Column(type: 'string', length: 50)]
@@ -54,16 +52,16 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface {
     #[ORM\ManyToOne(targetEntity: User::class)]
     #[ORM\JoinColumn(name: 'personal_manager_id', referencedColumnName: 'id', nullable: true)]
     #[Groups(['app:read'])]
-    private ?User $personal_manager;
+    private ?User $personal_manager = null;
 
     #[ORM\ManyToOne(targetEntity: User::class)]
     #[ORM\JoinColumn(name: 'referrer_agent_id', referencedColumnName: 'id', nullable: true)]
     #[Groups(['app:read'])]
-    private ?User $referrer_agent;
+    private ?User $referrer_agent = null;
 
     #[ORM\OneToOne(mappedBy: 'user', targetEntity: Company::class, cascade: ['persist', 'remove'])]
     #[Groups(['app:read'])]
-    private ?Company $company;
+    private ?Company $company = null;
 
     // --- 2. ДОБАВИТЬ ЭТО ПОЛЕ ---
     /**
@@ -73,7 +71,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface {
     #[ORM\ManyToOne(targetEntity: Bank::class)]
     #[ORM\JoinColumn(name: 'bank_id', referencedColumnName: 'id', nullable: true)]
     #[Groups(['app:read'])]
-    private ?Bank $bank;
+    private ?Bank $bank = null;
     // --- КОНЕЦ ДОБАВЛЕНИЯ ---
 
     #[ORM\Column(type: 'datetime_immutable')]
@@ -100,153 +98,36 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface {
         $this->created_at = new \DateTimeImmutable();
     }
 
-    public function getPasswordHash(): string
-    {
-        return $this->password_hash;
-    }
+    public function getId(): int { return $this->id; }
+    public function getEmail(): string { return $this->email; }
+    public function setEmail(string $email): void { $this->email = $email; }
 
-    public function setPasswordHash(string $password_hash): void
-    {
-        $this->password_hash = $password_hash;
-    }
+    public function getPassword(): string { return $this->password_hash; }
+    public function setPasswordHash(string $password_hash): void { $this->password_hash = $password_hash; }
 
-    public function getId(): int
-    {
-        return $this->id;
-    }
+    public function getRole(): string { return $this->role; }
+    public function setRole(string $role): void { $this->role = $role; }
 
-    public function setId(int $id): void
-    {
-        $this->id = $id;
-    }
+    public function getStatus(): string { return $this->status; }
+    public function setStatus(string $status): void { $this->status = $status; }
 
-    public function getEmail(): string
-    {
-        return $this->email;
-    }
+    public function getFio(): string { return $this->fio; }
+    public function setFio(string $fio): void { $this->fio = $fio; }
 
-    public function setEmail(string $email): void
-    {
-        $this->email = $email;
-    }
+    public function getPhone(): string { return $this->phone; }
+    public function setPhone(string $phone): void { $this->phone = $phone; }
 
-    public function getStatus(): string
-    {
-        return $this->status;
-    }
+    public function getCompany(): ?Company { return $this->company; }
+    public function setCompany(?Company $company): void { $this->company = $company; }
 
-    public function setStatus(string $status): void
-    {
-        $this->status = $status;
-    }
+    public function getReferrerAgent(): ?User { return $this->referrer_agent; }
+    public function setReferrerAgent(?User $referrer_agent): void { $this->referrer_agent = $referrer_agent; }
 
-    public function getRole(): string
-    {
-        return $this->role;
-    }
+    public function getBank(): ?Bank { return $this->bank; }
+    public function setBank(?Bank $bank): void { $this->bank = $bank; }
 
-    public function setRole(string $role): void
-    {
-        $this->role = $role;
-    }
-
-    public function getFio(): string
-    {
-        return $this->fio;
-    }
-
-    public function setFio(string $fio): void
-    {
-        $this->fio = $fio;
-    }
-
-    public function getPhone(): string
-    {
-        return $this->phone;
-    }
-
-    public function setPhone(string $phone): void
-    {
-        $this->phone = $phone;
-    }
-
-    public function getPersonalManager(): ?User
-    {
-        return $this->personal_manager;
-    }
-
-    public function setPersonalManager(?User $personal_manager): void
-    {
-        $this->personal_manager = $personal_manager;
-    }
-
-    public function getReferrerAgent(): ?User
-    {
-        return $this->referrer_agent;
-    }
-
-    public function setReferrerAgent(?User $referrer_agent): void
-    {
-        $this->referrer_agent = $referrer_agent;
-    }
-
-    public function getCompany(): ?Company
-    {
-        return $this->company;
-    }
-
-    public function setCompany(?Company $company): void
-    {
-        $this->company = $company;
-    }
-
-    public function getCreatedAt(): \DateTimeImmutable
-    {
-        return $this->created_at;
-    }
-
-    public function setCreatedAt(\DateTimeImmutable $created_at): void
-    {
-        $this->created_at = $created_at;
-    }
-
-    /**
-     * Возвращает роли.
-     * Мы форматируем нашу 'admin' в 'ROLE_ADMIN' для Symfony.
-     */
-    public function getRoles(): array
-    {
-        $roles = ['ROLE_' . strtoupper($this->role)];
-        $roles[] = 'ROLE_USER'; // Гарантируем, что у всех есть эта роль
-
-        return array_unique($roles);
-    }
-
-    /**
-     * Возвращает хешированный пароль (то, что требует PasswordAuthenticatedUserInterface).
-     */
-    public function getPassword(): string
-    {
-        return $this->password_hash;
-    }
-
-    /**
-     * Возвращает "логин" пользователя (то, что требует UserInterface).
-     */
-    public function getUserIdentifier(): string
-    {
-        return $this->email;
-    }
-
-    public function getPreferences(): array
-    {
-        return $this->preferences;
-    }
-
-    public function setPreferences(array $preferences): void
-    {
-        $this->preferences = $preferences;
-    }
+    public function getPreferences(): array { return $this->preferences; }
+    public function setPreferences(array $preferences): void { $this->preferences = $preferences; }
 
     public function getGender(): ?string { return $this->gender; }
     public function setGender(?string $gender): void { $this->gender = $gender; }
@@ -257,16 +138,20 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface {
     public function getAvatarPath(): ?string { return $this->avatarPath; }
     public function setAvatarPath(?string $avatarPath): void { $this->avatarPath = $avatarPath; }
 
-    /**
-     * Метод для очистки временных паролей (нам не нужен).
-     */
-    public function eraseCredentials(): void
-    {
-        // Мы не храним пароли в открытом виде,
-        // поэтому здесь ничего делать не нужно.
+    public function getCreatedAt(): \DateTimeImmutable { return $this->created_at; }
+
+    // --- ИНТЕРФЕЙСЫ SECURITY ---
+
+    public function getRoles(): array {
+        $roles = ['ROLE_' . strtoupper($this->role)];
+        $roles[] = 'ROLE_USER';
+        return array_unique($roles);
     }
 
-    // ... ЗДЕСЬ НУЖНО СГЕНЕРИРОВАТЬ ГЕТТЕРЫ И СЕТТЕРЫ ...
-    // (Нажмите Alt+Insert в PhpStorm)
+    public function getUserIdentifier(): string {
+        return $this->email;
+    }
+
+    public function eraseCredentials(): void {}
 }
 ?>

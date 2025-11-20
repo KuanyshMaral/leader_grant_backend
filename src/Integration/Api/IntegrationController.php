@@ -20,11 +20,12 @@ class IntegrationController extends AbstractController
     ) {
     }
 
-    /**
+    /*|*
      * Эндпоинт для автозаполнения по ИНН (checko.ru).
      *
      * GET /api/integration/inn/7707083893
      */
+
     #[Route('/inn/{inn}', methods: ['GET'], requirements: ['inn' => '\d{10,12}'])]
     public function getCompanyInfo(
         #[Assert\NotBlank]
@@ -45,6 +46,7 @@ class IntegrationController extends AbstractController
      *
      * GET /api/integration/tender/0123456789
      */
+
     #[Route('/tender/{number}', methods: ['GET'])]
     public function getTenderInfo(
         #[Assert\NotBlank]

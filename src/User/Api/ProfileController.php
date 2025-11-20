@@ -12,6 +12,7 @@ use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 use Symfony\Component\Security\Http\Attribute\CurrentUser;
+use App\User\DTO\UpdateUserProfileDTO;
 
 // Все роуты в этом классе будут защищены (начинаются с /api/profile)
 #[Route('/api/profile')]
@@ -52,17 +53,45 @@ class ProfileController extends AbstractController
         #[CurrentUser] ?User $user,
         UserService $userService
     ): JsonResponse {
-
-        if (!$user) {
-            throw new AccessDeniedException();
-        }
-
+        if (!$user) throw new AccessDeniedException();
         $company = $userService->updateCompanyProfile($user, $dto);
+        return $this->json(['message' => 'Профиль компании успешно обновлен', 'company_id' => $company->getId()]);
+    }
+
+    /**
+     * Обновление личных данных (ФИО, email, телефон, аватар).
+     */
+    #[Route('/update', methods: ['PATCH'])]
+    public function updateProfile(
+        #[MapRequestPayload] UpdateUserProfileDTO $dto,
+        #[CurrentUser] User $user,
+        UserService $userService
+    ): JsonResponse {
+
+        $updatedUser = $userService->updateProfile($user, $dto);
 
         return $this->json([
-            'message' => 'Профиль компании успешно обновлен',
-            'company_id' => $company->getId(),
+            'message' => 'Профиль обновлен',
+            'user' => [
+                'email' => $updatedUser->getEmail(),
+                'fio' => $updatedUser->getFio(),
+                'avatar' => $updatedUser->getAvatarPath()
+            ]
         ]);
+    }
+
+    /**
+     * Удаление аккаунта.
+     */
+    #[Route('', methods: ['DELETE'])]
+    public function deleteProfile(
+        #[CurrentUser] User $user,
+        UserService $userService
+    ): JsonResponse {
+
+        $userService->deleteUser($user);
+
+        return $this->json(['message' => 'Аккаунт успешно удален']);
     }
 
     /**
@@ -86,5 +115,21 @@ class ProfileController extends AbstractController
             'message' => 'Заявка на аккредитацию успешно подана',
             'new_status' => $user->getStatus(),
         ]);
+    }
+
+    /**
+     * Получить ПОЛНУЮ анкету компании текущего пользователя.
+     */
+    #[Route('/company', methods: ['GET'])]
+    public function getCompanyProfile(#[CurrentUser] User $user): JsonResponse
+    {
+        $company = $user->getCompany();
+        if (!$company) {
+            return $this->json(['error' => 'Компания не создана'], 404);
+        }
+
+        // Возвращаем объект целиком (сериализатор сам превратит его в JSON)
+        // Убедитесь, что у полей в Company.php стоит группа #[Groups(['company:read'])] или ['app:read']
+        return $this->json($company, 200, [], ['groups' => 'app:read']);
     }
 }

@@ -83,7 +83,7 @@ class Document {
     #[Groups(['doc:read'])]
     private ?int $fileSize = 0; // Размер в байтах
 
-    #[ORM\Column(type: 'string', length: 50, nullable: true)]
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     #[Groups(['doc:read'])]
     private ?string $mimeType = null; // application/pdf, image/jpeg
 

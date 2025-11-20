@@ -12,6 +12,7 @@ use App\Shared\DTO\PaginationRequestDTO;
 use App\User\Entity\User;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request; // <-- ДОБАВЛЕНО
 use Symfony\Component\HttpKernel\Attribute\MapQueryString;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Routing\Annotation\Route;
@@ -23,7 +24,6 @@ class ApplicationController extends AbstractController
 {
     /**
      * Эндпоинт "Калькулятора" (Шаг 1).
-     * Принимает DTO, возвращает список одобренных/отклоненных банков.
      */
     #[Route('/calculate', methods: ['POST'])]
     public function calculate(
@@ -38,41 +38,42 @@ class ApplicationController extends AbstractController
 
     /**
      * Эндпоинт "Создание Заявки" (Шаг 2).
-     * Принимает DTO (уже с bank_ids) и создает заявки.
      */
     #[Route('', methods: ['POST'])]
     public function create(
         #[MapRequestPayload] CreateApplicationDTO $dto,
-        #[CurrentUser] User $creator, // Тот, кто нажал кнопку (Клиент или Агент)
+        #[CurrentUser] User $creator,
         ApplicationService $applicationService
     ): JsonResponse {
 
-        // Вся логика (поиск клиента, создание заявок, "крик" в очередь)
-        // спрятана внутри ApplicationService.
         $applications = $applicationService->createApplications($dto, $creator);
 
         return $this->json([
             'message' => 'Заявки успешно созданы',
             'created_ids' => array_map(fn($app) => $app->getId(), $applications)
-        ], 201); // 201 Created
+        ], 201);
     }
 
     /**
-     * Эндпоинт "Список Заявок" (с пагинацией).
-     * Автоматически фильтрует по роли (Клиент/Агент/Партнер/Админ).
+     * Эндпоинт "Список Заявок" (с пагинацией и фильтрацией).
+     * Пример: GET /api/applications?page=1&status=rejected&product=bank_guarantee
      */
     #[Route('', methods: ['GET'])]
     public function list(
         #[CurrentUser] User $user,
-        #[MapQueryString] ?PaginationRequestDTO $pagination, // Валидация ?page=1&limit=20
+        #[MapQueryString] ?PaginationRequestDTO $pagination,
+        Request $request, // <-- Читаем параметры запроса
         ApplicationService $applicationService
     ): JsonResponse {
 
-        $pagination ??= new PaginationRequestDTO(); // (Если ?page не указан)
+        $pagination ??= new PaginationRequestDTO();
 
-        $result = $applicationService->listForUser($user, $pagination);
+        // Читаем фильтры из URL
+        $status = $request->query->get('status');
+        $product = $request->query->get('product');
 
-        // Мы используем 'groups' => 'app:read', чтобы JSON был "чистым"
+        $result = $applicationService->listForUser($user, $pagination, $status, $product);
+
         return $this->json($result, 200, [], ['groups' => 'app:read']);
     }
 
@@ -86,9 +87,6 @@ class ApplicationController extends AbstractController
         ApplicationService $applicationService
     ): JsonResponse {
 
-        // Вся логика (включая проверку "может ли $user видеть заявку $id")
-        // спрятана внутри getApplicationForUser.
-        // Если прав нет, он "выбросит" 403 Exception.
         $application = $applicationService->getApplicationForUser($id, $user);
 
         return $this->json($application, 200, [], ['groups' => 'app:read']);
@@ -97,16 +95,14 @@ class ApplicationController extends AbstractController
     /**
      * Эндпоинт "Смена Статуса" (для Админа/Партнера).
      */
-    #[Route('/{id}/status', methods: ['PATCH'])] // PATCH - частичное обновление
+    #[Route('/{id}/status', methods: ['PATCH'])]
     public function updateStatus(
         int $id,
-        #[MapRequestPayload] UpdateApplicationStatusDTO $dto, // Валидация DTO
-        #[CurrentUser] User $updater, // Админ или Партнер
+        #[MapRequestPayload] UpdateApplicationStatusDTO $dto,
+        #[CurrentUser] User $updater,
         ApplicationService $applicationService
     ): JsonResponse {
 
-        // Вся логика (проверка прав, смена статуса, сохранение оферты)
-        // спрятана внутри.
         $application = $applicationService->updateStatus($id, $dto, $updater);
 
         return $this->json($application, 200, [], ['groups' => 'app:read']);

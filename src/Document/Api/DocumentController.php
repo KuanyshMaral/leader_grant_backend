@@ -12,6 +12,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Http\Attribute\CurrentUser;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 // Все роуты здесь защищены файрволом 'api' (требуют JWT)
 #[Route('/api/documents')]
@@ -66,5 +67,71 @@ class DocumentController extends AbstractController
             'file_name' => $document->getFileName(),
             'file_path' => $document->getFilePath(),
         ], Response::HTTP_CREATED); // 201 Created
+    }
+
+    /**
+     * Эндпоинт для безопасного скачивания файла.
+     * GET /api/documents/{id}/download
+     */
+    #[Route('/{id}/download', methods: ['GET'])]
+    public function download(
+        int $id,
+        #[CurrentUser] User $user
+    ): Response {
+
+        try {
+            $fileData = $this->documentService->downloadFile($id, $user);
+        } catch (\Exception $e) {
+            return $this->json(['error' => $e->getMessage()], 404);
+        }
+
+        // Создаем StreamedResponse - это экономит память PHP.
+        // Файл не грузится в RAM целиком, а отдается кусочками.
+        $response = new StreamedResponse(function () use ($fileData) {
+            $outputStream = fopen('php://output', 'wb');
+            stream_copy_to_stream($fileData['stream'], $outputStream);
+        });
+
+        // Устанавливаем заголовки для браузера
+        $response->headers->set('Content-Type', $fileData['mimeType']);
+        $response->headers->set(
+            'Content-Disposition',
+            $response->headers->makeDisposition(
+                'attachment', // или 'inline', если хотите открывать в браузере
+                $fileData['filename']
+            )
+        );
+
+        return $response;
+    }
+
+    /**
+     * Эндпоинт "Заменить документ".
+     * POST /api/documents/{id}/replace
+     */
+    #[Route('/{id}/replace', methods: ['POST'])]
+    public function replace(
+        int $id,
+        Request $request,
+        #[CurrentUser] User $user
+    ): JsonResponse {
+        $file = $request->files->get('file');
+        $reason = $request->request->get('reason');
+
+        if (!$file) {
+            return $this->json(['error' => 'Файл не найден'], 400);
+        }
+
+        try {
+            $newDoc = $this->documentService->replaceDocument($id, $file, $user, $reason);
+        } catch (\Exception $e) {
+            return $this->json(['error' => $e->getMessage()], 500);
+        }
+
+        return $this->json([
+            'document_id' => $newDoc->getId(),
+            'file_name' => $newDoc->getFileName(),
+            'status' => 'success'
+        ], 201);
     }
 }

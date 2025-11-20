@@ -3,15 +3,20 @@
 
 namespace App\User\Service;
 
+use App\Document\Repository\DocumentRepository;
 use App\User\DTO\UpdateCompanyProfileDTO;
+use App\User\DTO\UpdateUserProfileDTO;
 use App\User\Entity\Company;
 use App\User\Entity\User;
 use App\User\Exception\AccreditationException;
+use App\User\Exception\UserAlreadyExistsException;
 use App\User\Repository\CompanyRepository;
 use App\User\Repository\UserRepository;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
 use App\User\Event\AccreditationSubmittedEvent;
+use App\User\Event\AccreditationApprovedEvent;
+use App\User\Event\AccreditationRejectedEvent;
 
 class UserService
 {
@@ -19,6 +24,7 @@ class UserService
         private readonly UserRepository $userRepository,
         private readonly CompanyRepository $companyRepository,
         private readonly LoggerInterface $logger,
+        private readonly DocumentRepository $documentRepository,
         private readonly MessageBusInterface $bus
     ) {
     }
@@ -28,58 +34,102 @@ class UserService
      */
     public function updateCompanyProfile(User $user, UpdateCompanyProfileDTO $dto): Company
     {
-        // 1. Находим компанию пользователя или создаем новую
         $company = $user->getCompany() ?? new Company();
-        $company->setUser($user); // Связываем с User
+        $company->setUser($user);
 
-        // 2. Переносим данные из DTO в Entity
         $company->setName($dto->name);
         $company->setFullName($dto->full_name);
         $company->setInn($dto->inn);
         $company->setOgrn($dto->ogrn);
         $company->setLegalAddress($dto->legal_address);
-        $company->setCeoFio($dto->ceo_fio);
+
+        // CEO теперь может быть в массиве management, но если пришел строкой - сохраняем
+        $company->setCeoFio($dto->ceo_fio ?? '');
         $company->setTaxSystem($dto->tax_system);
 
-        // 3. Преобразуем вложенный DTO реквизитов в массив для jsonb
-        $requisitesArray = [
-            'bik' => $dto->requisites->bik,
-            'checking_account' => $dto->requisites->checking_account,
-            'corr_account' => $dto->requisites->corr_account,
-        ];
-        $company->setRequisites($requisitesArray);
-
-        $company->setKpp($dto->kpp);
-        $company->setActualAddress($dto->actual_address);
-        $company->setOkpo($dto->okpo);
-        $company->setOktmo($dto->oktmo);
-        $company->setOkved($dto->okved);
-
-        // Обработка даты
-        if ($dto->registration_date) {
-            try {
-                $company->setRegistrationDate(new \DateTimeImmutable($dto->registration_date));
-            } catch (\Exception $e) {}
-        }
-
-        // JSON массивы переносим "как есть"
+        // --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
+        // Мы просто сохраняем массивы, пришедшие с фронта, напрямую в JSON-поля
+        $company->setRequisites($dto->requisites);
         $company->setManagement($dto->management);
         $company->setFounders($dto->founders);
         $company->setLicenses($dto->licenses);
         $company->setContactPersons($dto->contact_persons);
         $company->setEtpAccounts($dto->etp_accounts);
-        $company->setRequisites($dto->requisites);
+        // -------------------------
 
-        // 4. Сохраняем
+        // Доп. поля
+        if (property_exists($dto, 'kpp')) $company->setKpp($dto->kpp);
+        if (property_exists($dto, 'actual_address')) $company->setActualAddress($dto->actual_address);
+        if (property_exists($dto, 'web_site')) $company->setWebSite($dto->web_site);
+        if (property_exists($dto, 'office_phone')) $company->setOfficePhone($dto->office_phone);
+        if (property_exists($dto, 'vat_rate')) $company->setVatRate($dto->vat_rate);
+        if (property_exists($dto, 'authorized_capital')) $company->setAuthorizedCapital($dto->authorized_capital);
+        if (property_exists($dto, 'paid_capital')) $company->setPaidCapital($dto->paid_capital);
+        if (property_exists($dto, 'employee_count')) $company->setEmployeeCount($dto->employee_count);
+        if (property_exists($dto, 'contract_count')) $company->setContractCount($dto->contract_count);
+
+        if (property_exists($dto, 'registration_date') && $dto->registration_date) {
+            try {
+                $company->setRegistrationDate(new \DateTimeImmutable($dto->registration_date));
+            } catch (\Exception $e) {}
+        }
+
         $this->companyRepository->save($company, true);
 
         $this->logger->info('Профиль компании обновлен', [
             'user_id' => $user->getId(),
             'company_id' => $company->getId(),
-            'inn' => $company->getInn(),
         ]);
 
         return $company;
+    }
+
+    public function updateProfile(User $user, UpdateUserProfileDTO $dto): User
+    {
+        // 1. Если меняется Email, проверяем уникальность
+        if ($dto->email && $dto->email !== $user->getEmail()) {
+            $exists = $this->userRepository->findOneBy(['email' => $dto->email]);
+            if ($exists) {
+                throw new UserAlreadyExistsException(); // "Email уже занят"
+            }
+            $user->setEmail($dto->email);
+        }
+
+        if ($dto->fio) {
+            $user->setFio($dto->fio);
+        }
+
+        if ($dto->phone) {
+            $user->setPhone($dto->phone);
+        }
+
+        // 2. Обработка Аватара
+        if ($dto->avatar_document_id) {
+            $doc = $this->documentRepository->find($dto->avatar_document_id);
+            if ($doc && $doc->getUploaderUser()->getId() === $user->getId()) {
+                // Мы сохраняем ссылку на скачивание как "путь к аватару"
+                // Это упростит жизнь фронтенду
+                $downloadUrl = '/api/documents/' . $doc->getId() . '/download';
+                $user->setAvatarPath($downloadUrl);
+            }
+        }
+
+        $this->userRepository->save($user, true);
+
+        $this->logger->info('Профиль пользователя обновлен', ['user_id' => $user->getId()]);
+
+        return $user;
+    }
+
+    public function deleteUser(User $user): void
+    {
+        $userId = $user->getId();
+
+        // Тут можно добавить проверку: "Нельзя удалить, если есть активные заявки"
+
+        $this->userRepository->remove($user, true);
+
+        $this->logger->info('Пользователь удалил свой аккаунт', ['user_id' => $userId]);
     }
 
     /**

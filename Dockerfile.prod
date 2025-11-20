@@ -1,0 +1,43 @@
+# Используем PHP с Apache (все в одном контейнере)
+FROM php:8.2-apache
+
+# Устанавливаем расширения
+RUN apt-get update && apt-get install -y \
+    libicu-dev \
+    libpq-dev \
+    libzip-dev \
+    unzip \
+    git \
+    && docker-php-ext-install intl pdo pdo_pgsql zip opcache
+
+# Включаем mod_rewrite для Apache (нужен для Symfony)
+RUN a2enmod rewrite
+
+# Настраиваем Apache, чтобы корень был в /public
+ENV APACHE_DOCUMENT_ROOT /var/www/html/public
+RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
+RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf .htaccess
+
+# Копируем composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+# Копируем код проекта
+WORKDIR /var/www/html
+COPY . .
+
+# Устанавливаем зависимости (для продакшена)
+RUN composer install --no-dev --optimize-autoloader
+
+# Права доступа (важно!)
+RUN chown -R www-data:www-data /var/www/html/var
+RUN chown -R www-data:www-data /var/www/html/config/jwt
+
+# Генерируем ключи JWT (если их нет)
+RUN mkdir -p config/jwt
+# ВАЖНО: Генерируем БЕЗ пароля для простоты на бесплатном хостинге
+RUN openssl genrsa -out config/jwt/private.pem 4096
+RUN openssl rsa -pubout -in config/jwt/private.pem -out config/jwt/public.pem
+RUN chown -R www-data:www-data config/jwt
+
+# Порт, который слушает Render
+EXPOSE 80

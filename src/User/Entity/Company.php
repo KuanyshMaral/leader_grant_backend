@@ -48,6 +48,10 @@ class Company {
     #[Groups(['app:read', 'user:read', 'company:write'])]
     private string $legal_address; // Юридический адрес
 
+    #[ORM\Column(type: 'string', length: 255)]
+    #[Groups(['app:read', 'user:read', 'company:write'])]
+    private string $ceo_fio;
+
     #[ORM\Column(type: 'text', nullable: true)]
     #[Groups(['app:read', 'user:read', 'company:write'])]
     private ?string $actual_address; // Фактический адрес
@@ -248,4 +252,12 @@ class Company {
 
     public function getVatRate(): ?string { return $this->vatRate; }
     public function setVatRate(?string $vatRate): void { $this->vatRate = $vatRate; }
+
+    public function getCeoFio(): string {
+        return $this->ceo_fio;
+    }
+
+    public function setCeoFio(string $ceo_fio): void {
+        $this->ceo_fio = $ceo_fio;
+    }
 }

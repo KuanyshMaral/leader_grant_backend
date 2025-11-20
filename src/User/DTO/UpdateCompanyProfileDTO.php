@@ -24,8 +24,14 @@ class UpdateCompanyProfileDTO {
 
     public ?string $actual_address = null;
 
+    // --- Контакты ---
+    public ?string $web_site = null;
+    public ?string $office_phone = null;
+    public ?string $email = null;
+
     /** @Assert\NotBlank */
     public string $tax_system;
+    public ?string $vat_rate = null; // Ставка НДС
 
     // Регистрационные данные
     public ?string $okpo = null;
@@ -37,6 +43,9 @@ class UpdateCompanyProfileDTO {
 
     public ?int $employee_count = null;
     public ?int $contract_count = null;
+
+    // --- Руководитель (для совместимости оставим строку, но данные будут в management) ---
+    public ?string $ceo_fio = null;
 
     /**
      * @Assert\Type("array")

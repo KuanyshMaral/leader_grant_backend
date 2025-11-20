@@ -16,6 +16,6 @@ class SendMessageDTO {
 
     // ID файла, если есть вложение.
     // Валидация самого файла (загрузка) - это отдельный эндпоинт.
-    public ?int $document_id;
+    public ?int $document_id = null;
 }
 ?>

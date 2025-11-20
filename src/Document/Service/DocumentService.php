@@ -14,6 +14,8 @@ use Symfony\Component\String\Slugger\SluggerInterface;
 use App\Document\Exception\DocumentNotFoundException;
 use App\Document\Exception\DocumentAccessDeniedException;
 use App\Document\Exception\DocumentAlreadyLinkedException;
+use Symfony\Component\Validator\Validator\ValidatorInterface; // <-- Валидатор
+use Symfony\Component\Validator\Constraints as Assert; // <-- Правила
 
 class DocumentService
 {
@@ -22,6 +24,7 @@ class DocumentService
         private readonly FilesystemOperator $defaultStorage,
         private readonly SluggerInterface $slugger,
         private readonly EntityManagerInterface $entityManager,
+        private readonly ValidatorInterface $validator,
         private readonly LoggerInterface $logger
     ) {
     }
@@ -31,62 +34,89 @@ class DocumentService
      */
     public function uploadFile(UploadedFile $file, User $uploader, string $docType): Document
     {
+        // 1. ВАЛИДАЦИЯ (Бизнес-правила)
+        $errors = $this->validator->validate($file, [
+            new Assert\File([
+                'maxSize' => '15M',
+                'mimeTypes' => [
+                    'application/pdf',
+                    'application/x-pdf',
+                    'image/jpeg',
+                    'image/png',
+                    'application/msword', // .doc
+                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+                    'application/vnd.ms-excel', // .xls
+                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+                ],
+                'mimeTypesMessage' => 'Пожалуйста, загрузите допустимый документ (PDF, JPG, PNG, Word, Excel)',
+            ])
+        ]);
+
+        if (count($errors) > 0) {
+            throw new \InvalidArgumentException($errors[0]->getMessage());
+        }
+
+        // 2. ГЕНЕРАЦИЯ ИМЕНИ
         $originalFilename = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
         $safeFilename = $this->slugger->slug($originalFilename);
+        // Добавляем uniqid, чтобы имена не пересекались
         $newFilename = $safeFilename.'-'.uniqid().'.'.$file->guessExtension();
 
+        // 3. ПУТЬ ХРАНЕНИЯ (Структура: user_ID/YYYY/MM/file)
         $path = sprintf(
-            'documents/user_%d/%s/%s',
+            'user_%d/%s/%s',
             $uploader->getId(),
-            (new \DateTime())->format('Y-m'),
+            (new \DateTime())->format('Y/m'),
             $newFilename
         );
 
+        // 4. СОХРАНЕНИЕ НА ДИСК (Через Stream для экономии памяти)
+        $stream = fopen($file->getRealPath(), 'r');
         try {
-            // 4. ФИЗИЧЕСКИ СОХРАНЯЕМ ФАЙЛ
-            $tempPath = $file->getRealPath();
-            $stream = fopen($tempPath, 'r');
-
-            $this->defaultStorage->writeStream(
-                $path,
-                $stream
-            );
-
+            $this->defaultStorage->writeStream($path, $stream);
+        } catch (FilesystemException $e) {
+            throw new \Exception('Ошибка записи файла на диск: ' . $e->getMessage());
+        } finally {
             if (is_resource($stream)) {
                 fclose($stream);
             }
-
-        } catch (\Exception $e) {
-            $this->logger->error('Ошибка загрузки файла в хранилище', [
-                'error' => $e->getMessage(),
-                'path' => $path,
-            ]);
-            throw new \Exception('Не удалось сохранить файл.');
         }
 
-        // 5. СОЗДАЕМ ЗАПИСЬ В БД
+        // 5. СОХРАНЕНИЕ В БД
         $document = new Document();
         $document->setUploaderUser($uploader);
         $document->setDocType($docType);
         $document->setFileName($file->getClientOriginalName());
         $document->setFilePath($path);
-
-        // --- ЗАПОЛНЯЕМ НОВЫЕ ПОЛЯ (Размер и Тип) ---
-        $document->setFileSize($file->getSize()); // Размер в байтах
-        $document->setMimeType($file->getMimeType()); // e.g. application/pdf
-
-        // Статус по умолчанию 'pending' уже задан в Entity
+        $document->setFileSize($file->getSize());
+        $document->setMimeType($file->getMimeType());
 
         $this->documentRepository->save($document, true);
 
-        $this->logger->info('Файл успешно загружен', [
-            'doc_id' => $document->getId(),
-            'user_id' => $uploader->getId(),
-            'path' => $path,
-            'size' => $document->getFileSize()
-        ]);
+        $this->logger->info('Файл загружен', ['id' => $document->getId(), 'path' => $path]);
 
         return $document;
+    }
+
+    /**
+     * Метод для СКАЧИВАНИЯ файла (возвращает поток).
+     */
+    public function downloadFile(int $documentId, User $user): array
+    {
+        $document = $this->findAndVerify($documentId, $user);
+
+        try {
+            // Получаем поток (resource) из хранилища
+            $stream = $this->defaultStorage->readStream($document->getFilePath());
+        } catch (FilesystemException $e) {
+            throw new \Exception('Файл физически не найден на диске.');
+        }
+
+        return [
+            'stream' => $stream,
+            'filename' => $document->getFileName(),
+            'mimeType' => $document->getMimeType()
+        ];
     }
 
     /**
@@ -118,5 +148,33 @@ class DocumentService
         }
 
         return $document;
+    }
+
+    /**
+     * Замена документа (Версионность).
+     * Старый документ помечается как архивный, создается новый со ссылкой на старый.
+     */
+    public function replaceDocument(int $oldDocId, UploadedFile $file, User $uploader, ?string $reason): Document
+    {
+        // 1. Находим старый документ
+        $oldDoc = $this->findAndVerify($oldDocId, $uploader);
+
+        // 2. Загружаем новый файл как обычно
+        $newDoc = $this->uploadFile($file, $uploader, $oldDoc->getDocType());
+
+        // 3. Связываем их и архивируем старый
+        $newDoc->setParentDocument($oldDoc);
+        $newDoc->setVersionComment($reason);
+
+        // Переносим привязки (чтобы новый документ встал на место старого)
+        $newDoc->setCompany($oldDoc->getCompany());
+        $newDoc->setApplication($oldDoc->getApplication());
+
+        $oldDoc->setArchived(true);
+
+        $this->documentRepository->save($oldDoc);
+        $this->documentRepository->save($newDoc, true);
+
+        return $newDoc;
     }
 }

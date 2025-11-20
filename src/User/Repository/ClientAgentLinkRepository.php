@@ -34,4 +34,20 @@ class ClientAgentLinkRepository extends ServiceEntityRepository
             $this->getEntityManager()->flush();
         }
     }
+
+    /**
+     * Находит всех клиентов, привязанных к агенту.
+     * @return ClientAgentLink[]
+     */
+    public function findClientsByAgent(int $agentId): array
+    {
+        return $this->createQueryBuilder('c')
+            ->andWhere('c.agent_user = :agentId')
+            ->setParameter('agentId', $agentId)
+            ->andWhere('c.status = :status')
+            ->setParameter('status', 'linked') // Берем только активные связи
+            ->orderBy('c.id', 'DESC')
+            ->getQuery()
+            ->getResult();
+    }
 }

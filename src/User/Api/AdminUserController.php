@@ -4,6 +4,7 @@
 namespace App\User\Api;
 
 use App\User\Entity\User;
+use App\User\DTO\CreatePartnerDTO;
 use App\User\Repository\UserRepository;
 use App\User\Service\UserService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -12,6 +13,9 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Http\Attribute\CurrentUser;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
+use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
+use App\Bank\Repository\BankRepository;
+use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
 #[Route('/api/admin/users')]
 #[IsGranted('ROLE_ADMIN')] // <-- ВЕСЬ КОНТРОЛЛЕР ЗАЩИЩЕН
@@ -91,5 +95,47 @@ class AdminUserController extends AbstractController
             'message' => 'Аккредитация отклонена',
             'new_status' => $userToReject->getStatus(), // (будет 'rejected')
         ]);
+    }
+
+    /**
+     * [Админ] Создает Партнера (сотрудника банка).
+     */
+    #[Route('/create-partner', methods: ['POST'])]
+    public function createPartner(
+        #[MapRequestPayload] CreatePartnerDTO $dto,
+        UserPasswordHasherInterface $passwordHasher,
+        BankRepository $bankRepository
+    ): JsonResponse {
+
+        // 1. Проверяем, есть ли такой банк
+        $bank = $bankRepository->find($dto->bank_id);
+        if (!$bank) {
+            return $this->json(['error' => 'Банк не найден'], 404);
+        }
+
+        // 2. Проверяем email
+        if ($this->userRepository->findOneBy(['email' => $dto->email])) {
+            return $this->json(['error' => 'Email уже занят'], 409);
+        }
+
+        // 3. Создаем User
+        $user = new User();
+        $user->setEmail($dto->email);
+        $user->setFio($dto->fio);
+        $user->setPhone($dto->phone);
+        $user->setRole('partner');
+        $user->setStatus('active'); // Партнеру не нужна аккредитация
+        $user->setBank($bank);      // <--- ПРИВЯЗЫВАЕМ К БАНКУ!
+
+        // 4. Пароль
+        $hashedPwd = $passwordHasher->hashPassword($user, $dto->password);
+        $user->setPasswordHash($hashedPwd);
+
+        $this->userRepository->save($user, true);
+
+        return $this->json([
+            'message' => 'Партнер успешно создан',
+            'id' => $user->getId()
+        ], 201);
     }
 }

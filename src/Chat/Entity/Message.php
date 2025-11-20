@@ -4,9 +4,10 @@
 namespace App\Chat\Entity;
 
 use Doctrine\ORM\Mapping as ORM;
-use App\Chat\Repository\MessageRepository; // (Мы создадим этот класс позже)
+use App\Chat\Repository\MessageRepository;
 use App\Application\Entity\Application;
 use App\User\Entity\User;
+use Symfony\Component\Serializer\Annotation\Groups;
 
 #[ORM\Entity(repositoryClass: MessageRepository::class)]
 class Message {
@@ -14,47 +15,43 @@ class Message {
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column(type: 'integer')]
-    #[Groups(['chat:read'])] // <-- 2. ДОБАВИТЬ ГРУППУ
+    #[Groups(['chat:read'])]
     private int $id;
 
     #[ORM\ManyToOne(targetEntity: Application::class)]
     #[ORM\JoinColumn(name: 'application_id', referencedColumnName: 'id', nullable: false)]
-    // (Мы не хотим всю заявку в чате, только ID)
     private Application $application;
 
     #[ORM\ManyToOne(targetEntity: User::class)]
     #[ORM\JoinColumn(name: 'sender_user_id', referencedColumnName: 'id', nullable: false)]
-    #[Groups(['chat:read'])] // <-- 3. ДОБАВИТЬ (чтобы показать, кто отправил)
+    #[Groups(['chat:read'])]
     private User $sender_user;
 
     #[ORM\Column(type: 'text')]
-    #[Groups(['chat:read'])] // <-- 4. ДОБАВИТЬ
+    #[Groups(['chat:read'])]
     private string $body;
 
     #[ORM\Column(type: 'string', length: 20)]
-    #[Groups(['chat:read'])] // <-- 5. ДОБАВИТЬ (pending/approved)
+    #[Groups(['chat:read'])]
     private string $moderation_status;
 
     #[ORM\Column(type: 'boolean')]
-    #[Groups(['chat:read'])] // <-- 6. ДОБАВИТЬ
+    #[Groups(['chat:read'])]
     private bool $read_status = false;
 
     #[ORM\Column(type: 'datetime_immutable')]
-    #[Groups(['chat:read'])] // <-- 7. ДОБАВИТЬ (время отправки)
+    #[Groups(['chat:read'])]
     private \DateTimeImmutable $created_at;
 
     public function __construct() {
         $this->created_at = new \DateTimeImmutable();
     }
 
+    // --- ГЕТТЕРЫ И СЕТТЕРЫ (ОБЯЗАТЕЛЬНЫ ДЛЯ API) ---
+
     public function getId(): int
     {
         return $this->id;
-    }
-
-    public function setId(int $id): void
-    {
-        $this->id = $id;
     }
 
     public function getApplication(): Application
@@ -67,16 +64,6 @@ class Message {
         $this->application = $application;
     }
 
-    public function getBody(): string
-    {
-        return $this->body;
-    }
-
-    public function setBody(string $body): void
-    {
-        $this->body = $body;
-    }
-
     public function getSenderUser(): User
     {
         return $this->sender_user;
@@ -85,6 +72,16 @@ class Message {
     public function setSenderUser(User $sender_user): void
     {
         $this->sender_user = $sender_user;
+    }
+
+    public function getBody(): string
+    {
+        return $this->body;
+    }
+
+    public function setBody(string $body): void
+    {
+        $this->body = $body;
     }
 
     public function getModerationStatus(): string
@@ -97,16 +94,6 @@ class Message {
         $this->moderation_status = $moderation_status;
     }
 
-    public function getCreatedAt(): \DateTimeImmutable
-    {
-        return $this->created_at;
-    }
-
-    public function setCreatedAt(\DateTimeImmutable $created_at): void
-    {
-        $this->created_at = $created_at;
-    }
-
     public function isReadStatus(): bool
     {
         return $this->read_status;
@@ -117,6 +104,13 @@ class Message {
         $this->read_status = $read_status;
     }
 
-    // ... ЗДЕСЬ НУЖНО СГЕНЕРИРОВАТЬ ГЕТТЕРЫ И СЕТТЕРЫ ...
+    public function getCreatedAt(): \DateTimeImmutable
+    {
+        return $this->created_at;
+    }
+
+    public function setCreatedAt(\DateTimeImmutable $created_at): void
+    {
+        $this->created_at = $created_at;
+    }
 }
-?>

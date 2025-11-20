@@ -32,19 +32,28 @@ class ProductDataDTO {
 
     // --- Поля для Факторинга ---
     public ?string $contractor_inn = null;     // ИНН контрагента
-    public ?string $factoring_type;     // (Enum: Классический, Закрытый, ...)
+    /**
+     * @Assert\Choice(choices={"classical", "closed", "purchasing"}, message="Неверный тип факторинга")
+     */
+    public ?string $factoring_type = null;
 
-    // --- Поля для ВЭД ---
-    public ?string $currency;           // Валюта
-    public ?string $country;            // Страна платежа
+    // --- СТРАХОВАНИЕ ---
+    /**
+     * @Assert\Choice(choices={"personnel", "transport", "property", "liability"}, message="Неверный вид страхования")
+     */
+// --- ТЕНДЕРНОЕ СОПРОВОЖДЕНИЕ ---
+    /**
+     * @Assert\Choice(choices={"one_time", "turnkey"}, message="Неверный вариант сопровождения")
+     */
+    public ?string $support_option = null;
+    public ?string $industry = null; // Отрасль
 
-    // --- Поля для Страхования ---
-    public ?string $insurance_type;     // (Enum: Персонал, Транспорт, Имущество, ...)
-    public ?string $insurance_product;  // (Enum: ДМС, ОСАГО, ...)
 
-    // --- Поля для Тендерного сопровождения ---
-    public ?string $support_option;     // (Enum: Разовое, Под ключ)
-    public ?string $industry;           // Отрасль закупок
+    // --- ВЭД ---
+    public ?string $currency = null;
+    public ?string $country = null;
 
+    // --- БГ (Кросс-продажа) ---
+    public bool $need_credit = false; // Галочка "Клиенту нужен кредит"
 
 }

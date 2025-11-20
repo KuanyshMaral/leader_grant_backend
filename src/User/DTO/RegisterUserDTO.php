@@ -33,6 +33,6 @@ class RegisterUserDTO {
     public string $phone;
 
     // ID агента, если регистрация по реферальной ссылке
-    public ?int $referrer_agent_id;
+    public ?int $referrer_agent_id = null;
 }
 ?>

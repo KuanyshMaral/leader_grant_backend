@@ -34,4 +34,17 @@ class DocumentRepository extends ServiceEntityRepository
             $this->getEntityManager()->flush();
         }
     }
+
+    /**
+     * Найти все документы, загруженные конкретным пользователем.
+     */
+    public function findAllByUser(int $userId): array
+    {
+        return $this->createQueryBuilder('d')
+            ->andWhere('d.uploader_user = :userId')
+            ->setParameter('userId', $userId)
+            ->orderBy('d.createdAt', 'DESC') // <--- ИСПРАВЛЕНО (было created_at)
+            ->getQuery()
+            ->getResult();
+    }
 }
