@@ -1,4 +1,4 @@
-# Используем PHP с Apache (все в одном контейнере)
+# Используем PHP 8.4 (чтобы совпадало с вашим composer.lock)
 FROM php:8.4-apache
 
 # Устанавливаем расширения
@@ -10,35 +10,36 @@ RUN apt-get update && apt-get install -y \
     git \
     && docker-php-ext-install intl pdo pdo_pgsql zip opcache
 
-# Включаем mod_rewrite для Apache (нужен для Symfony)
+# Включаем mod_rewrite для Apache
 RUN a2enmod rewrite
 
-# Настраиваем Apache, чтобы корень был в /public
+# Настраиваем Apache
 ENV APACHE_DOCUMENT_ROOT /var/www/html/public
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
-# ИСПРАВЛЕННАЯ СТРОКА (убрали .htaccess):
 RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf
 
 # Копируем composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Копируем код проекта
+# Копируем код
 WORKDIR /var/www/html
 COPY . .
 
-# Устанавливаем зависимости (для продакшена)
+# Устанавливаем зависимости
 RUN composer install --no-dev --optimize-autoloader
 
-# Права доступа (важно!)
-RUN chown -R www-data:www-data /var/www/html/var
-RUN chown -R www-data:www-data /var/www/html/config/jwt
+# --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
+# Создаем папку var (кеш/логи), так как её нет в git
+RUN mkdir -p var
 
-# Генерируем ключи JWT (если их нет)
+# Права доступа
+RUN chown -R www-data:www-data var
+# -------------------------
+
+# Генерируем ключи JWT
 RUN mkdir -p config/jwt
-# ВАЖНО: Генерируем БЕЗ пароля для простоты на бесплатном хостинге
 RUN openssl genrsa -out config/jwt/private.pem 4096
 RUN openssl rsa -pubout -in config/jwt/private.pem -out config/jwt/public.pem
 RUN chown -R www-data:www-data config/jwt
 
-# Порт, который слушает Render
 EXPOSE 80
