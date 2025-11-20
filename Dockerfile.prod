@@ -16,7 +16,8 @@ RUN a2enmod rewrite
 # Настраиваем Apache, чтобы корень был в /public
 ENV APACHE_DOCUMENT_ROOT /var/www/html/public
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
-RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf .htaccess
+# ИСПРАВЛЕННАЯ СТРОКА (убрали .htaccess):
+RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf
 
 # Копируем composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
