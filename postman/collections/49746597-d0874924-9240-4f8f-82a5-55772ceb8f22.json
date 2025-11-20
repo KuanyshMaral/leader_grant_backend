@@ -874,6 +874,51 @@
 				"description": "Generated from cURL: curl --location 'http://localhost:8080/api/register' \\\r\n--header 'Content-Type: application/json' \\\r\n--data-raw '{\r\n    \"email\": \"agent_test@example.com\",\r\n    \"password\": \"password123\",\r\n    \"role\": \"agent\",\r\n    \"fio\": \"Иванов Иван Иванович\",\r\n    \"phone\": \"+79990000000\",\r\n    \"referrer_agent_id\": null\r\n}'"
 			},
 			"response": []
+		},
+		{
+			"name": "http://localhost:8080/api/admin/users/create-partner",
+			"id": "49746597-fd5c26dd-a671-4872-ae2b-6733b181bf87",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer <eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJpYXQiOjE3NjM2MzcwNzUsImV4cCI6MTc2MzY0MDY3NSwicm9sZXMiOlsiUk9MRV9BRE1JTiIsIlJPTEVfVVNFUiJdLCJ1c2VybmFtZSI6ImFkbWluQGxlYWRlci1ncm91cC5ydSJ9.UGK2uC7djf0YW1wy8419dSyBmcWQq-C4QqcoupKqht0FUlI8DyHxeVhdL3-uLsjDE4GHkOpqVMre-kromBd1RNdHgIRc2_kKJd1zwNptBVYrGUf1DcDgnqX1nN7iirjOgdn-WO-gy_Z2IvkUrP_4rK9DIn1yp2I--5JvFkXLLHcXhrn8tDL2T5F9_U7ShNWL6UOUeaM6obMweGDX2U-TBMRLYghC1FcRnRw8FgL6SpBcIUARBpcuKxOyXXquxU4kx_giIsYf-zC6nkiilcstgDNVxZf4sxBkb922PyIo7VOEpecKGsJ5cIA6UFccRYbqLCNHWhnjHUfgAmUoSlBZAna-E_a625kvcRipLXw9P7M0Sw4DmFik3r7Wc07hbAzZBl6wdnYFUPwd8dHa6wwJyCR-5MD_qi4zoZlGgfo7ckFqcRebqpau9-7mXYvOnzUM0Wf_RJLnDGgZUHDJMCzQemVBjc9wmxUZI2Hwe5YA50NI5RNhaW_YRgZF7HZvxi66I50pag_draU4L0HwSz320qaRveXqYv7BKUOpeUJGo6sIN2cEeU9hbwIiQAg8EKTjgN0nJiWUeNBZA7SAixrtdutzWXaFBTwV-aX3xGJwQnV7MnzmeZGS1B447GROc-Evg6eyu_DAvZWAo-ed97e5ApsbzNJ-gRsYuP7vlFJN0Fw>"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"email\": \"sber_manager@test.com\",\r\n    \"password\": \"password123\",\r\n    \"fio\": \"Сбербанков Иван Иванович\",\r\n    \"phone\": \"+79991112233\",\r\n    \"bank_id\": 1\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8080/api/admin/users/create-partner",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"admin",
+						"users",
+						"create-partner"
+					]
+				},
+				"description": "Generated from cURL: curl --location 'http://localhost:8080/api/admin/users/create-partner' \\\r\n--header 'Content-Type: application/json' \\\r\n--header 'Authorization: Bearer <eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJpYXQiOjE3NjM2MzcwNzUsImV4cCI6MTc2MzY0MDY3NSwicm9sZXMiOlsiUk9MRV9BRE1JTiIsIlJPTEVfVVNFUiJdLCJ1c2VybmFtZSI6ImFkbWluQGxlYWRlci1ncm91cC5ydSJ9.UGK2uC7djf0YW1wy8419dSyBmcWQq-C4QqcoupKqht0FUlI8DyHxeVhdL3-uLsjDE4GHkOpqVMre-kromBd1RNdHgIRc2_kKJd1zwNptBVYrGUf1DcDgnqX1nN7iirjOgdn-WO-gy_Z2IvkUrP_4rK9DIn1yp2I--5JvFkXLLHcXhrn8tDL2T5F9_U7ShNWL6UOUeaM6obMweGDX2U-TBMRLYghC1FcRnRw8FgL6SpBcIUARBpcuKxOyXXquxU4kx_giIsYf-zC6nkiilcstgDNVxZf4sxBkb922PyIo7VOEpecKGsJ5cIA6UFccRYbqLCNHWhnjHUfgAmUoSlBZAna-E_a625kvcRipLXw9P7M0Sw4DmFik3r7Wc07hbAzZBl6wdnYFUPwd8dHa6wwJyCR-5MD_qi4zoZlGgfo7ckFqcRebqpau9-7mXYvOnzUM0Wf_RJLnDGgZUHDJMCzQemVBjc9wmxUZI2Hwe5YA50NI5RNhaW_YRgZF7HZvxi66I50pag_draU4L0HwSz320qaRveXqYv7BKUOpeUJGo6sIN2cEeU9hbwIiQAg8EKTjgN0nJiWUeNBZA7SAixrtdutzWXaFBTwV-aX3xGJwQnV7MnzmeZGS1B447GROc-Evg6eyu_DAvZWAo-ed97e5ApsbzNJ-gRsYuP7vlFJN0Fw>' \\\r\n--data-raw '{\r\n    \"email\": \"sber_manager@test.com\",\r\n    \"password\": \"password123\",\r\n    \"fio\": \"Сбербанков Иван Иванович\",\r\n    \"phone\": \"+79991112233\",\r\n    \"bank_id\": 1\r\n}'"
+			},
+			"response": []
 		}
 	],
 	"auth": {
