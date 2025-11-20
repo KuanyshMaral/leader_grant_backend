@@ -42,4 +42,15 @@ RUN openssl genrsa -out config/jwt/private.pem 4096
 RUN openssl rsa -pubout -in config/jwt/private.pem -out config/jwt/public.pem
 RUN chown -R www-data:www-data config/jwt
 
+# --- ДОБАВЛЯЕМ ЭТО ---
+# Копируем скрипт запуска
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+
+# Делаем его исполняемым (важно!)
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Говорим Docker'у использовать этот скрипт как точку входа
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+
+# Открываем порт
 EXPOSE 80
