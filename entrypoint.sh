@@ -1,22 +1,17 @@
 #!/bin/bash
 set -e
 
-# --- ВРЕМЕННАЯ СТРОКА (УДАЛИТЬ ПОСЛЕ УСПЕШНОГО ДЕПЛОЯ) ---
-echo "🧨 СБРОС БАЗЫ ДАННЫХ..."
+echo "🧨 СБРОС БАЗЫ (Hard Reset)..."
+# Удаляем вообще всё
 php bin/console doctrine:schema:drop --force --full-database
-# ---------------------------------------------------------
 
-# 1. Накатываем миграции (всегда при запуске)
-echo "🚀 Запуск миграций..."
-php bin/console doctrine:migrations:migrate --no-interaction --all-or-nothing
+echo "🏗️ СОЗДАНИЕ СХЕМЫ ИЗ КОДА..."
+# Создаем таблицы напрямую из PHP-классов (игнорируя папку migrations)
+php bin/console doctrine:schema:create
 
-# 2. Загружаем фикстуры (ТОЛЬКО если мы попросили это через переменную)
-if [ "$LOAD_FIXTURES" = "true" ]; then
-    echo "🌱 Загрузка демо-данных (Fixtures)..."
-    # --append добавит данные к существующим, не удаляя базу (безопаснее на проде)
-    php bin/console doctrine:fixtures:load --no-interaction --append
-fi
+echo "🌱 ЗАГРУЗКА ДАННЫХ (Fixtures)..."
+# Заливаем админа и банки
+php bin/console doctrine:fixtures:load --no-interaction --append
 
-# 3. Запускаем Apache (как обычно)
-echo "🔥 Запуск Apache..."
+echo "🔥 ЗАПУСК APACHE..."
 exec apache2-foreground
