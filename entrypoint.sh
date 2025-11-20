@@ -1,17 +1,25 @@
 #!/bin/bash
 set -e
 
-echo "🧨 СБРОС БАЗЫ (Hard Reset)..."
-# Удаляем вообще всё
-php bin/console doctrine:schema:drop --force --full-database
+echo "🚀 Запуск миграций..."
+# Используем force, чтобы не было вопросов, если база рассинхронизирована (для первого запуска)
+# php bin/console doctrine:schema:update --force --complete
+# Или стандартные миграции:
+php bin/console doctrine:migrations:migrate --no-interaction --all-or-nothing
 
-echo "🏗️ СОЗДАНИЕ СХЕМЫ ИЗ КОДА..."
-# Создаем таблицы напрямую из PHP-классов (игнорируя папку migrations)
-php bin/console doctrine:schema:create
+# (Опционально) Загрузка фикстур
+# if [ "$LOAD_FIXTURES" = "true" ]; then
+#     echo "🌱 Загрузка демо-данных (Fixtures)..."
+#     php bin/console doctrine:fixtures:load --no-interaction --append
+# fi
 
-echo "🌱 ЗАГРУЗКА ДАННЫХ (Fixtures)..."
-# Заливаем админа и банки
-php bin/console doctrine:fixtures:load --no-interaction --append
+# --- ВАЖНОЕ ИСПРАВЛЕНИЕ ЗДЕСЬ ---
+echo "🔧 Настройка прав доступа..."
+# Так как мы перенесли кеш в /tmp (в Kernel.php), нужно дать туда доступ веб-серверу
+mkdir -p /tmp/cache /tmp/log
+chown -R www-data:www-data /tmp/cache /tmp/log
+chmod -R 777 /tmp/cache /tmp/log
+# --------------------------------
 
-echo "🔥 ЗАПУСК APACHE..."
+echo "🔥 Запуск Apache..."
 exec apache2-foreground
