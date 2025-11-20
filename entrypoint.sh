@@ -1,6 +1,11 @@
 #!/bin/bash
 set -e
 
+# --- ВРЕМЕННАЯ СТРОКА (УДАЛИТЬ ПОСЛЕ УСПЕШНОГО ДЕПЛОЯ) ---
+echo "🧨 СБРОС БАЗЫ ДАННЫХ..."
+php bin/console doctrine:schema:drop --force --full-database
+# ---------------------------------------------------------
+
 # 1. Накатываем миграции (всегда при запуске)
 echo "🚀 Запуск миграций..."
 php bin/console doctrine:migrations:migrate --no-interaction --all-or-nothing
