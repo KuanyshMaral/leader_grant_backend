@@ -835,6 +835,45 @@
 			],
 			"id": "49746597-79c31ce5-59fe-4ff2-a62a-4aa61d078164",
 			"description": "Требует JWT-токен Администратора"
+		},
+		{
+			"name": "http://localhost:8080/api/register",
+			"id": "49746597-00c07601-3ac9-4822-afdf-c7ee6d3278e4",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"email\": \"agent_test@example.com\",\r\n    \"password\": \"password123\",\r\n    \"role\": \"agent\",\r\n    \"fio\": \"Иванов Иван Иванович\",\r\n    \"phone\": \"+79990000000\",\r\n    \"referrer_agent_id\": null\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8080/api/register",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"register"
+					]
+				},
+				"description": "Generated from cURL: curl --location 'http://localhost:8080/api/register' \\\r\n--header 'Content-Type: application/json' \\\r\n--data-raw '{\r\n    \"email\": \"agent_test@example.com\",\r\n    \"password\": \"password123\",\r\n    \"role\": \"agent\",\r\n    \"fio\": \"Иванов Иван Иванович\",\r\n    \"phone\": \"+79990000000\",\r\n    \"referrer_agent_id\": null\r\n}'"
+			},
+			"response": []
 		}
 	],
 	"auth": {
