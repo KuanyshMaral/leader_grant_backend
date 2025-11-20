@@ -26,7 +26,7 @@ WORKDIR /var/www/html
 COPY . .
 
 # Устанавливаем зависимости
-RUN composer install --no-dev --optimize-autoloader
+RUN composer install --optimize-autoloader
 
 # --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
 # Создаем папку var (кеш/логи), так как её нет в git
