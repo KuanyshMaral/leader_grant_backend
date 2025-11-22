@@ -37,42 +37,39 @@ class UserService
         $company = $user->getCompany() ?? new Company();
         $company->setUser($user);
 
+        // Простые поля
         $company->setName($dto->name);
         $company->setFullName($dto->full_name);
         $company->setInn($dto->inn);
         $company->setOgrn($dto->ogrn);
+        $company->setKpp($dto->kpp);
         $company->setLegalAddress($dto->legal_address);
-
-        // CEO теперь может быть в массиве management, но если пришел строкой - сохраняем
+        $company->setActualAddress($dto->actual_address);
         $company->setCeoFio($dto->ceo_fio ?? '');
         $company->setTaxSystem($dto->tax_system);
 
-        // --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
-        // Мы просто сохраняем массивы, пришедшие с фронта, напрямую в JSON-поля
+        $company->setWebSite($dto->web_site);
+        $company->setOfficePhone($dto->office_phone);
+        $company->setVatRate($dto->vat_rate);
+        $company->setAuthorizedCapital($dto->authorized_capital);
+        $company->setPaidCapital($dto->paid_capital);
+        $company->setEmployeeCount($dto->employee_count);
+        $company->setContractCount($dto->contract_count);
+
+        if ($dto->registration_date) {
+            try {
+                $company->setRegistrationDate(new \DateTimeImmutable($dto->registration_date));
+            } catch (\Exception $e) {}
+        }
+
+        // --- МАССИВЫ (Просто сохраняем как есть) ---
         $company->setRequisites($dto->requisites);
         $company->setManagement($dto->management);
         $company->setFounders($dto->founders);
         $company->setLicenses($dto->licenses);
         $company->setContactPersons($dto->contact_persons);
         $company->setEtpAccounts($dto->etp_accounts);
-        // -------------------------
-
-        // Доп. поля
-        if (property_exists($dto, 'kpp')) $company->setKpp($dto->kpp);
-        if (property_exists($dto, 'actual_address')) $company->setActualAddress($dto->actual_address);
-        if (property_exists($dto, 'web_site')) $company->setWebSite($dto->web_site);
-        if (property_exists($dto, 'office_phone')) $company->setOfficePhone($dto->office_phone);
-        if (property_exists($dto, 'vat_rate')) $company->setVatRate($dto->vat_rate);
-        if (property_exists($dto, 'authorized_capital')) $company->setAuthorizedCapital($dto->authorized_capital);
-        if (property_exists($dto, 'paid_capital')) $company->setPaidCapital($dto->paid_capital);
-        if (property_exists($dto, 'employee_count')) $company->setEmployeeCount($dto->employee_count);
-        if (property_exists($dto, 'contract_count')) $company->setContractCount($dto->contract_count);
-
-        if (property_exists($dto, 'registration_date') && $dto->registration_date) {
-            try {
-                $company->setRegistrationDate(new \DateTimeImmutable($dto->registration_date));
-            } catch (\Exception $e) {}
-        }
+        // -------------------------------------------
 
         $this->companyRepository->save($company, true);
 

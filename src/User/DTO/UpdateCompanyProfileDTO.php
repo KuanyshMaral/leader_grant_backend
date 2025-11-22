@@ -2,68 +2,56 @@
 // src/User/DTO/UpdateCompanyProfileDTO.php
 
 namespace App\User\DTO;
+
 use Symfony\Component\Validator\Constraints as Assert;
 
-class UpdateCompanyProfileDTO {
-    /** @Assert\NotBlank */
+class UpdateCompanyProfileDTO
+{
+    #[Assert\NotBlank]
+    #[Assert\Length(min: 10, max: 12)]
     public string $inn;
 
-    /** @Assert\NotBlank */
+    #[Assert\NotBlank]
     public string $ogrn;
 
     public ?string $kpp = null;
-
-    /** @Assert\NotBlank */
     public string $name;
-
-    /** @Assert\NotBlank */
     public string $full_name;
-
-    /** @Assert\NotBlank */
     public string $legal_address;
-
     public ?string $actual_address = null;
 
-    // --- Контакты ---
     public ?string $web_site = null;
     public ?string $office_phone = null;
     public ?string $email = null;
+    public ?string $ceo_fio = null;
 
-    /** @Assert\NotBlank */
+    #[Assert\NotBlank]
     public string $tax_system;
-    public ?string $vat_rate = null; // Ставка НДС
+    public ?string $vat_rate = null;
 
-    // Регистрационные данные
-    public ?string $okpo = null;
-    public ?string $oktmo = null;
-    public ?string $okved = null;
-    public ?string $registration_date = null; // Приходит как строка "YYYY-MM-DD"
+    public ?string $registration_date = null;
     public ?string $authorized_capital = null;
     public ?string $paid_capital = null;
-
     public ?int $employee_count = null;
     public ?int $contract_count = null;
 
-    // --- Руководитель (для совместимости оставим строку, но данные будут в management) ---
-    public ?string $ceo_fio = null;
+    // --- СПИСКИ (Просто массивы) ---
 
-    /**
-     * @Assert\Type("array")
-     */
-    public array $requisites = []; // Теперь это просто массив, так гибче
+    #[Assert\Type("array")]
+    public array $requisites = [];
 
-    /** @Assert\Type("array") */
-    public ?array $management = [];
+    #[Assert\Type("array")]
+    public array $management = [];
 
-    /** @Assert\Type("array") */
-    public ?array $founders = [];
+    #[Assert\Type("array")]
+    public array $founders = [];
 
-    /** @Assert\Type("array") */
-    public ?array $licenses = [];
+    #[Assert\Type("array")]
+    public array $licenses = [];
 
-    /** @Assert\Type("array") */
-    public ?array $contact_persons = [];
+    #[Assert\Type("array")]
+    public array $contact_persons = [];
 
-    /** @Assert\Type("array") */
-    public ?array $etp_accounts = [];
+    #[Assert\Type("array")]
+    public array $etp_accounts = [];
 }
