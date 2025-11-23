@@ -46,6 +46,7 @@
 						{
 							"listen": "test",
 							"script": {
+								"id": "ac0b5d74-2a49-4d89-9aa5-b706deaa2633",
 								"exec": [
 									"pm.test(\"Status code is 200\", function () {",
 									"    pm.response.to.have.status(200);",
@@ -59,7 +60,8 @@
 									"});"
 								],
 								"type": "text/javascript",
-								"id": "ac0b5d74-2a49-4d89-9aa5-b706deaa2633"
+								"packages": {},
+								"requests": {}
 							}
 						}
 					],
@@ -72,7 +74,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"email\": \"agent1@test.com\",\n  \"password\": \"password123\"\n}",
+							"raw": "{\n  \"email\": \"agent@leader.ru\",\n  \"password\": \"password\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
