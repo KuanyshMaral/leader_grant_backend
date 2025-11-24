@@ -63,4 +63,10 @@ services:
     App\Document\Service\DocumentService:
         arguments:
             # '@default.storage' - это имя сервиса из flysystem.yaml
-            $defaultStorage: '@default.storage'
+           # $defaultStorage: '@default.storage'
+
+    # Связываем хранилища для UploadService
+    App\Upload\Service\UploadService:
+        arguments:
+            $publicStorage: '@public.storage'
+            $privateStorage: '@default.storage'

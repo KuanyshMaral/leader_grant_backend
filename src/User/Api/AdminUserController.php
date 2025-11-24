@@ -138,4 +138,37 @@ class AdminUserController extends AbstractController
             'id' => $user->getId()
         ], 201);
     }
+
+    #[Route('/{id}/assign-manager', methods: ['PATCH'])]
+    public function assignManager(int $id, Request $request): JsonResponse
+    {
+        $client = $this->userRepository->find($id);
+        if (!$client) return $this->json(['error' => 'Пользователь не найден'], 404);
+        $data = $request->toArray();
+        $managerId = $data['manager_id'] ?? null;
+        if (!$managerId) return $this->json(['error' => 'manager_id обязателен'], 400);
+        $manager = $this->userRepository->find($managerId);
+        if (!$manager || $manager->getRole() !== 'admin') return $this->json(['error' => 'Менеджер не найден'], 404);
+        $client->setPersonalManager($manager);
+        $this->userRepository->save($client, true);
+        return $this->json(['message' => 'Менеджер назначен', 'manager_id' => $manager->getId()]);
+    }
+
+    #[Route('/{id}/remove-manager', methods: ['DELETE'])]
+    public function removeManager(int $id): JsonResponse
+    {
+        $client = $this->userRepository->find($id);
+        if (!$client) return $this->json(['error' => 'Пользователь не найден'], 404);
+        $client->setPersonalManager(null);
+        $this->userRepository->save($client, true);
+        return $this->json(['message' => 'Менеджер удален']);
+    }
+
+    #[Route('/managers', methods: ['GET'])]
+    public function listManagers(): JsonResponse
+    {
+        $managers = $this->userRepository->findBy(['role' => 'admin']);
+        $result = array_map(fn($m) => ['id' => $m->getId(), 'fio' => $m->getFio(), 'email' => $m->getEmail()], $managers);
+        return $this->json($result);
+    }
 }

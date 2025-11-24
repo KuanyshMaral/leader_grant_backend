@@ -5,15 +5,28 @@ namespace App\Document\Entity;
 
 use Doctrine\ORM\Mapping as ORM;
 use App\Document\Repository\DocumentRepository;
+use App\Document\Enum\DocumentStatus;
+use App\Document\Enum\DocumentType;
 use App\User\Entity\User;
 use App\User\Entity\Company;
 use App\Application\Entity\Application;
 use App\Chat\Entity\Message;
+use App\Upload\Entity\UploadedFile;
+use App\Shared\Trait\SoftDeletable;
 use Symfony\Component\Serializer\Annotation\Groups;
+use Symfony\Component\Serializer\Annotation\SerializedName;
 
 #[ORM\Entity(repositoryClass: DocumentRepository::class)]
 #[ORM\Table(name: '`documents`')]
+#[ORM\Index(name: 'idx_uploader', columns: ['uploader_user_id'])]
+#[ORM\Index(name: 'idx_company', columns: ['company_id'])]
+#[ORM\Index(name: 'idx_doc_application', columns: ['application_id'])]
+#[ORM\Index(name: 'idx_message', columns: ['message_id'])]
+#[ORM\Index(name: 'idx_doc_status', columns: ['status'])]
+#[ORM\Index(name: 'idx_doc_type', columns: ['doc_type'])]
+#[ORM\Index(name: 'idx_uploaded_file', columns: ['uploaded_file_id'])]
 class Document {
+    use SoftDeletable; // ДОБАВЛЕНО: Мягкое удаление
 
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -60,32 +73,40 @@ class Document {
 
     // --- ОСНОВНЫЕ ДАННЫЕ ---
 
-    #[ORM\Column(type: 'string', length: 100)]
+    #[ORM\Column(type: 'string', enumType: DocumentType::class, length: 100)]
     #[Groups(['app:read', 'doc:read', 'chat:read'])]
-    private string $docType; // e.g. 'ustav', 'passport', 'balance_f1'
+    #[SerializedName('doc_type')]
+    private DocumentType $docType;
 
-    #[ORM\Column(type: 'string', length: 20)]
+    #[ORM\Column(type: 'string', enumType: DocumentStatus::class)]
     #[Groups(['app:read', 'doc:read', 'chat:read'])]
-    private string $status = 'pending'; // enum: pending, approved, rejected
+    private DocumentStatus $status = DocumentStatus::PENDING;
 
     #[ORM\Column(type: 'text', nullable: true)]
     #[Groups(['app:read', 'doc:read'])]
     private ?string $rejectionReason = null; // Если статус rejected
 
-    #[ORM\Column(type: 'string', length: 255)]
-    #[Groups(['app:read', 'doc:read', 'chat:read'])]
-    private string $fileName; // Оригинальное имя (scan.pdf)
+    /**
+     * Ссылка на загруженный файл.
+     * НОВАЯ АРХИТЕКТУРА: файл хранится отдельно в модуле Upload.
+     */
+    #[ORM\OneToOne(targetEntity: UploadedFile::class)]
+    #[ORM\JoinColumn(name: 'uploaded_file_id', referencedColumnName: 'id', nullable: true)]
+    #[Groups(['doc:read'])]
+    private ?UploadedFile $file = null;
 
-    #[ORM\Column(type: 'text')]
-    private string $filePath; // Путь в хранилище (не показываем в API напрямую, отдаем через контроллер скачивания)
+    // DEPRECATED: Старые поля для обратной совместимости (будут удалены после миграции)
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
+    private ?string $fileName_deprecated = null;
+
+    #[ORM\Column(type: 'text', nullable: true)]
+    private ?string $filePath_deprecated = null;
 
     #[ORM\Column(type: 'integer', nullable: true)]
-    #[Groups(['doc:read'])]
-    private ?int $fileSize = 0; // Размер в байтах
+    private ?int $fileSize_deprecated = null;
 
     #[ORM\Column(type: 'string', length: 255, nullable: true)]
-    #[Groups(['doc:read'])]
-    private ?string $mimeType = null; // application/pdf, image/jpeg
+    private ?string $mimeType_deprecated = null;
 
     #[ORM\Column(type: 'datetime_immutable')]
     #[Groups(['app:read', 'doc:read', 'chat:read'])]
@@ -123,17 +144,58 @@ class Document {
     public function getMessage(): ?Message { return $this->message; }
     public function setMessage(?Message $message): void { $this->message = $message; }
 
-    public function getDocType(): string { return $this->docType; }
-    public function setDocType(string $docType): void { $this->docType = $docType; }
+    public function getDocType(): DocumentType { return $this->docType; }
+    public function setDocType(DocumentType $docType): void { $this->docType = $docType; }
 
-    public function getStatus(): string { return $this->status; }
-    public function setStatus(string $status): void { $this->status = $status; }
+    public function getStatus(): DocumentStatus { return $this->status; }
+    public function setStatus(DocumentStatus $status): void { $this->status = $status; }
 
-    public function getFileName(): string { return $this->fileName; }
-    public function setFileName(string $fileName): void { $this->fileName = $fileName; }
+    // --- NEW: File management ---
+    
+    public function getFile(): ?UploadedFile { return $this->file; }
+    public function setFile(?UploadedFile $file): void { $this->file = $file; }
 
-    public function getFilePath(): string { return $this->filePath; }
-    public function setFilePath(string $filePath): void { $this->filePath = $filePath; }
+    // --- BACKWARD COMPATIBILITY: Поддержка старых методов через новую архитектуру ---
+    
+    /**
+     * @deprecated Используйте $document->getFile()->getOriginalFileName()
+     */
+    public function getFileName(): string 
+    { 
+        // Если есть новый файл, берём имя оттуда
+        if ($this->file) {
+            return $this->file->getOriginalFileName();
+        }
+        // Иначе возвращаем старое поле
+        return $this->fileName_deprecated ?? '';
+    }
+    
+    /**
+     * @deprecated Больше не используется, файл управляется через Upload модуль
+     */
+    public function setFileName(string $fileName): void 
+    { 
+        $this->fileName_deprecated = $fileName; 
+    }
+
+    /**
+     * @deprecated Используйте $document->getFile()->getFullPath()
+     */
+    public function getFilePath(): string 
+    { 
+        if ($this->file) {
+            return $this->file->getFullPath();
+        }
+        return $this->filePath_deprecated ?? '';
+    }
+    
+    /**
+     * @deprecated Больше не используется
+     */
+    public function setFilePath(string $filePath): void 
+    { 
+        $this->filePath_deprecated = $filePath; 
+    }
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 
@@ -150,9 +212,53 @@ class Document {
     public function getRejectionReason(): ?string { return $this->rejectionReason; }
     public function setRejectionReason(?string $rejectionReason): void { $this->rejectionReason = $rejectionReason; }
 
-    public function getFileSize(): ?int { return $this->fileSize; }
-    public function setFileSize(?int $fileSize): void { $this->fileSize = $fileSize; }
+    /**
+     * @deprecated Используйте $document->getFile()->getFileSize()
+     */
+    public function getFileSize(): ?int 
+    { 
+        if ($this->file) {
+            return $this->file->getFileSize();
+        }
+        return $this->fileSize_deprecated;
+    }
+    
+    /**
+     * @deprecated Больше не используется
+     */
+    public function setFileSize(?int $fileSize): void 
+    { 
+        $this->fileSize_deprecated = $fileSize; 
+    }
 
-    public function getMimeType(): ?string { return $this->mimeType; }
-    public function setMimeType(?string $mimeType): void { $this->mimeType = $mimeType; }
+    /**
+     * @deprecated Используйте $document->getFile()->getMimeType()
+     */
+    public function getMimeType(): ?string 
+    { 
+        if ($this->file) {
+            return $this->file->getMimeType();
+        }
+        return $this->mimeType_deprecated;
+    }
+    
+    /**
+     * @deprecated Больше не используется
+     */
+    public function setMimeType(?string $mimeType): void 
+    { 
+        $this->mimeType_deprecated = $mimeType; 
+    }
+
+    /**
+     * Get public URL path to the document file
+     */
+    public function getPublicPath(): string
+    {
+        if ($this->file) {
+            return $this->file->getPublicPath();
+        }
+        // Fallback to deprecated path
+        return $this->filePath_deprecated ?? '';
+    }
 }

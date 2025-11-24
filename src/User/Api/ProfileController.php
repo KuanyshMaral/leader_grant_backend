@@ -41,6 +41,7 @@ class ProfileController extends AbstractController
             'status' => $user->getStatus(),
             'company_inn' => $user->getCompany()?->getInn(),
             'company_name' => $user->getCompany()?->getName(),
+            'avatar' => $user->getAvatarPath(),
         ]);
     }
 

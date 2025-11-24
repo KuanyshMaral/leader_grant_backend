@@ -4,14 +4,27 @@
 namespace App\Application\Entity;
 
 use Doctrine\ORM\Mapping as ORM;
-use App\Application\Repository\ApplicationRepository; // (Мы создадим этот класс позже)
+use App\Application\Repository\ApplicationRepository;
+use App\Application\Enum\ApplicationStatus;
+use App\Application\Enum\ProductType;
 use App\User\Entity\User;
 use App\Bank\Entity\Bank;
+use App\Shared\Trait\SoftDeletable;
 use Symfony\Component\Serializer\Annotation\Groups;
 
 #[ORM\Entity(repositoryClass: ApplicationRepository::class)]
-#[ORM\HasLifecycleCallbacks] // Нужно для автоматического updated_at
+#[ORM\Table(name: 'applications')]
+#[ORM\Index(name: 'idx_client_user', columns: ['client_user_id'])]
+#[ORM\Index(name: 'idx_agent_user', columns: ['agent_user_id'])]
+#[ORM\Index(name: 'idx_application_bank', columns: ['bank_id'])]
+#[ORM\Index(name: 'idx_app_status', columns: ['status'])]
+#[ORM\Index(name: 'idx_product_type', columns: ['product_type'])]
+#[ORM\Index(name: 'idx_app_created_at', columns: ['created_at'])]
+#[ORM\Index(name: 'idx_updated_at', columns: ['updated_at'])]
+#[ORM\Index(name: 'idx_status_product', columns: ['status', 'product_type'])]
+#[ORM\HasLifecycleCallbacks]
 class Application {
+    use SoftDeletable; // ДОБАВЛЕНО: Мягкое удаление
 
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -34,13 +47,13 @@ class Application {
     #[Groups(['app:read'])] // <-- ДОБАВИТЬ (Мы сериализуем Банк)
     private Bank $bank;
 
-    #[ORM\Column(type: 'string', length: 50)]
-    #[Groups(['app:read'])] // <-- ДОБАВИТЬ
-    private string $product_type;
+    #[ORM\Column(type: 'string', enumType: ProductType::class)]
+    #[Groups(['app:read'])]
+    private ProductType $product_type;
 
-    #[ORM\Column(type: 'string', length: 50)]
-    #[Groups(['app:read'])] // <-- ДОБАВИТЬ
-    private string $status;
+    #[ORM\Column(type: 'string', enumType: ApplicationStatus::class)]
+    #[Groups(['app:read'])]
+    private ApplicationStatus $status = ApplicationStatus::DRAFT;
 
     #[ORM\Column(type: 'decimal', precision: 15, scale: 2)]
     #[Groups(['app:read'])] // <-- ДОБАВИТЬ
@@ -130,22 +143,22 @@ class Application {
         $this->bank = $bank;
     }
 
-    public function getProductType(): string
+    public function getProductType(): ProductType
     {
         return $this->product_type;
     }
 
-    public function setProductType(string $product_type): void
+    public function setProductType(ProductType $product_type): void
     {
         $this->product_type = $product_type;
     }
 
-    public function getStatus(): string
+    public function getStatus(): ApplicationStatus
     {
         return $this->status;
     }
 
-    public function setStatus(string $status): void
+    public function setStatus(ApplicationStatus $status): void
     {
         $this->status = $status;
     }

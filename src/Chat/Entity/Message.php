@@ -5,11 +5,18 @@ namespace App\Chat\Entity;
 
 use Doctrine\ORM\Mapping as ORM;
 use App\Chat\Repository\MessageRepository;
+use App\Chat\Enum\ModerationStatus;
 use App\Application\Entity\Application;
 use App\User\Entity\User;
 use Symfony\Component\Serializer\Annotation\Groups;
 
 #[ORM\Entity(repositoryClass: MessageRepository::class)]
+#[ORM\Table(name: 'messages')]
+#[ORM\Index(name: 'idx_msg_application', columns: ['application_id'])]
+#[ORM\Index(name: 'idx_sender', columns: ['sender_user_id'])]
+#[ORM\Index(name: 'idx_moderation_status', columns: ['moderation_status'])]
+#[ORM\Index(name: 'idx_msg_created_at', columns: ['created_at'])]
+#[ORM\Index(name: 'idx_msg_app_created', columns: ['application_id', 'created_at'])]
 class Message {
 
     #[ORM\Id]
@@ -31,9 +38,9 @@ class Message {
     #[Groups(['chat:read'])]
     private string $body;
 
-    #[ORM\Column(type: 'string', length: 20)]
+    #[ORM\Column(type: 'string', enumType: ModerationStatus::class)]
     #[Groups(['chat:read'])]
-    private string $moderation_status;
+    private ModerationStatus $moderation_status = ModerationStatus::PENDING;
 
     #[ORM\Column(type: 'boolean')]
     #[Groups(['chat:read'])]
@@ -84,12 +91,12 @@ class Message {
         $this->body = $body;
     }
 
-    public function getModerationStatus(): string
+    public function getModerationStatus(): ModerationStatus
     {
         return $this->moderation_status;
     }
 
-    public function setModerationStatus(string $moderation_status): void
+    public function setModerationStatus(ModerationStatus $moderation_status): void
     {
         $this->moderation_status = $moderation_status;
     }

@@ -69,4 +69,50 @@ class IntegrationController extends AbstractController
 
         return $this->json($tenderInfo);
     }
+
+    /**
+     * Эндпоинт для автозаполнения по ИНН (MOCK EGRUL).
+     * Используется в калькуляторе для быстрого тестирования.
+     * 
+     * GET /api/integration/company/7707083893
+     */
+    #[Route('/company/{inn}', methods: ['GET'], requirements: ['inn' => '\d{10,12}'])]
+    public function getCompanyByInn(
+        string $inn,
+        \App\Integration\Service\EGRULService $egrul
+    ): JsonResponse {
+        try {
+            $company = $egrul->getCompanyByINN($inn);
+            
+            return $this->json([
+                'inn' => $company->inn,
+                'name' => $company->name,
+                'ogrn' => $company->ogrn,
+                'address' => $company->legal_address,
+                'status' => $company->status
+            ]);
+        } catch (\RuntimeException $e) {
+            return $this->json(['error' => $e->getMessage()], 404);
+        }
+    }
+
+    /**
+     * Эндпоинт для автозаполнения по номеру закупки (MOCK EIS).
+     * Используется в калькуляторе для быстрого тестирования.
+     * 
+     * GET /api/integration/procurement/0373100002421000123
+     */
+    #[Route('/procurement/{number}', methods: ['GET'])]
+    public function getProcurementByNumber(
+        string $number,
+        \App\Integration\Service\EISService $eis
+    ): JsonResponse {
+        try {
+            $procurement = $eis->getProcurementByNumber($number);
+            
+            return $this->json($procurement->toArray());
+        } catch (\RuntimeException $e) {
+            return $this->json(['error' => $e->getMessage()], 404);
+        }
+    }
 }

@@ -1,0 +1,33 @@
+# config/packages/rate_limiter.yaml
+
+framework:
+    rate_limiter:
+        # Общий лимит для API
+        api:
+            policy: 'sliding_window'
+            limit: 100
+            interval: '1 minute'
+            
+        # Лимит для аутентификации
+        auth:
+            policy: 'fixed_window'
+            limit: 5
+            interval: '15 minutes'
+            
+        # Лимит для создания заявок
+        application_create:
+            policy: 'sliding_window'
+            limit: 10
+            interval: '1 hour'
+            
+        # Лимит для загрузки файлов
+        file_upload:
+            policy: 'token_bucket'
+            limit: 20
+            rate: { interval: '1 minute', amount: 5 }
+            
+        # Лимит для отправки сообщений в чат
+        chat_message:
+            policy: 'sliding_window'
+            limit: 30
+            interval: '1 minute'

@@ -6,124 +6,91 @@ namespace App\Document\Service;
 use App\Document\Entity\Document;
 use App\Document\Repository\DocumentRepository;
 use App\User\Entity\User;
+use App\Upload\Service\UploadService;
+use App\Upload\Enum\FileContext;
 use Doctrine\ORM\EntityManagerInterface;
-use League\Flysystem\FilesystemOperator;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
-use Symfony\Component\String\Slugger\SluggerInterface;
 use App\Document\Exception\DocumentNotFoundException;
 use App\Document\Exception\DocumentAccessDeniedException;
 use App\Document\Exception\DocumentAlreadyLinkedException;
-use Symfony\Component\Validator\Validator\ValidatorInterface; // <-- Валидатор
-use Symfony\Component\Validator\Constraints as Assert; // <-- Правила
+use App\Upload\Enum\FileStorage;
+use App\Document\Enum\DocumentType;
+
+use App\Document\Enum\DocumentStatus;
+use App\User\Enum\UserRole;
 
 class DocumentService
 {
     public function __construct(
         private readonly DocumentRepository $documentRepository,
-        private readonly FilesystemOperator $defaultStorage,
-        private readonly SluggerInterface $slugger,
+        private readonly UploadService $uploadService,
         private readonly EntityManagerInterface $entityManager,
-        private readonly ValidatorInterface $validator,
         private readonly LoggerInterface $logger
     ) {
     }
 
     /**
-     * "Шаг 1": Обрабатывает загрузку файла и создает запись в БД.
+     * Загрузка документа. Использует UploadService для хранения файла.
      */
-    public function uploadFile(UploadedFile $file, User $uploader, string $docType): Document
+    public function uploadFile(UploadedFile $file, User $uploader, string $docType, ?\App\Application\Entity\Application $application = null): Document
     {
-        // 1. ВАЛИДАЦИЯ (Бизнес-правила)
-        $errors = $this->validator->validate($file, [
-            new Assert\File([
-                'maxSize' => '15M',
-                'mimeTypes' => [
-                    'application/pdf',
-                    'application/x-pdf',
-                    'image/jpeg',
-                    'image/png',
-                    'application/msword', // .doc
-                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
-                    'application/vnd.ms-excel', // .xls
-                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
-                ],
-                'mimeTypesMessage' => 'Пожалуйста, загрузите допустимый документ (PDF, JPG, PNG, Word, Excel)',
-            ])
-        ]);
-
-        if (count($errors) > 0) {
-            throw new \InvalidArgumentException($errors[0]->getMessage());
-        }
-
-        // 2. ГЕНЕРАЦИЯ ИМЕНИ
-        $originalFilename = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
-        $safeFilename = $this->slugger->slug($originalFilename);
-        // Добавляем uniqid, чтобы имена не пересекались
-        $newFilename = $safeFilename.'-'.uniqid().'.'.$file->guessExtension();
-
-        // 3. ПУТЬ ХРАНЕНИЯ (Структура: user_ID/YYYY/MM/file)
-        $path = sprintf(
-            'user_%d/%s/%s',
-            $uploader->getId(),
-            (new \DateTime())->format('Y/m'),
-            $newFilename
+        // 1. Загружаем файл через UploadService
+        $uploadedFile = $this->uploadService->uploadFile(
+            $file,
+            $uploader,
+            FileContext::DOCUMENT,
+            null,  // contextId будет установлен позже, при привязке к Company
+            "Документ типа: {$docType}"
         );
 
-        // 4. СОХРАНЕНИЕ НА ДИСК (Через Stream для экономии памяти)
-        $stream = fopen($file->getRealPath(), 'r');
-        try {
-            $this->defaultStorage->writeStream($path, $stream);
-        } catch (FilesystemException $e) {
-            throw new \Exception('Ошибка записи файла на диск: ' . $e->getMessage());
-        } finally {
-            if (is_resource($stream)) {
-                fclose($stream);
-            }
+        // 2. Создаём метаданные документа
+        $document = new Document();
+        $document->setDocType(DocumentType::from($docType));
+        $document->setFile($uploadedFile);
+        $document->setUploaderUser($uploader);
+        $document->setStatus(DocumentStatus::PENDING);
+        
+        if ($application) {
+            $document->setApplication($application);
+            // Если документ привязан к заявке, можно сразу привязать и компанию клиента
+            $document->setCompany($application->getClientUser()->getCompany());
         }
 
-        // 5. СОХРАНЕНИЕ В БД
-        $document = new Document();
-        $document->setUploaderUser($uploader);
-        $document->setDocType($docType);
-        $document->setFileName($file->getClientOriginalName());
-        $document->setFilePath($path);
-        $document->setFileSize($file->getSize());
-        $document->setMimeType($file->getMimeType());
-
+        // 3. Сохраняем
         $this->documentRepository->save($document, true);
 
-        $this->logger->info('Файл загружен', ['id' => $document->getId(), 'path' => $path]);
+        $this->logger->info('Document created', [
+            'document_id' => $document->getId(),
+            'doc_type' => $docType,
+            'uploader_id' => $uploader->getId()
+        ]);
 
         return $document;
     }
 
     /**
-     * Метод для СКАЧИВАНИЯ файла (возвращает поток).
+     * Скачивание документа. Делегируем в UploadService.
      */
     public function downloadFile(int $documentId, User $user): array
     {
-        $document = $this->findAndVerify($documentId, $user);
+        $document = $this->findAndCheckAccess($documentId, $user);
 
-        try {
-            // Получаем поток (resource) из хранилища
-            $stream = $this->defaultStorage->readStream($document->getFilePath());
-        } catch (FilesystemException $e) {
-            throw new \Exception('Файл физически не найден на диске.');
+        if (!$document->getFile()) {
+            throw new DocumentNotFoundException('Файл не привязан к документу');
         }
 
-        return [
-            'stream' => $stream,
-            'filename' => $document->getFileName(),
-            'mimeType' => $document->getMimeType()
-        ];
+        // Делегируем скачивание в UploadService
+        return $this->uploadService->downloadFile($document->getFile()->getId(), $user);
     }
 
     /**
-     * "Шаг 2": Проверяет, что User имеет право привязать этот
-     * документ и что он еще не был привязан.
+     * Проверка прав доступа к документу.
      */
-    public function findAndVerify(int $documentId, User $user): Document
+    /**
+     * Проверка прав доступа к документу (без проверки на привязку).
+     */
+    private function findAndCheckAccess(int $documentId, User $user): Document
     {
         $document = $this->documentRepository->find($documentId);
 
@@ -131,18 +98,44 @@ class DocumentService
             throw new DocumentNotFoundException();
         }
 
-        // 1. Проверяем, что этот User сам же и загрузил этот файл
+        if ($document->isDeleted()) {
+            throw new DocumentNotFoundException();
+        }
+
+        // Разрешаем агентам управлять всеми документами (временное решение, нужен ACL)
+        if ($user->getRole() === UserRole::AGENT) {
+            $this->logger->info('Агент управляет документом', [
+                'agent_id' => $user->getId(),
+                'doc_id' => $documentId,
+                'uploader_id' => $document->getUploaderUser()->getId()
+            ]);
+            return $document;
+        }
+
+        // Проверяем права доступа для обычных пользователей
         if ($document->getUploaderUser()->getId() !== $user->getId()) {
-            $this->logger->warning('Попытка привязать чужой документ', [
-                'doc_id' => $documentId, 'user_id' => $user->getId()
+            $this->logger->warning('Попытка доступа к чужому документу', [
+                'doc_id' => $documentId,
+                'user_id' => $user->getId()
             ]);
             throw new DocumentAccessDeniedException();
         }
 
-        // 2. Проверяем, что файл не был "использован" (привязан) ранее
+        return $document;
+    }
+
+    /**
+     * Проверка прав доступа к документу и проверка на отсутствие привязки.
+     * Используется для операций, которые требуют непривязанного документа (удаление, привязка).
+     */
+    public function findAndVerify(int $documentId, User $user): Document
+    {
+        $document = $this->findAndCheckAccess($documentId, $user);
+
+        // Проверка на повторное использование (если нужно)
         if ($document->isLinked()) {
             $this->logger->warning('Попытка повторно привязать документ', [
-                'doc_id' => $documentId,
+                'doc_id' => $documentId
             ]);
             throw new DocumentAlreadyLinkedException();
         }
@@ -151,30 +144,128 @@ class DocumentService
     }
 
     /**
-     * Замена документа (Версионность).
-     * Старый документ помечается как архивный, создается новый со ссылкой на старый.
+     * Замена документа. Использует UploadService для замены файла.
      */
     public function replaceDocument(int $oldDocId, UploadedFile $file, User $uploader, ?string $reason): Document
     {
-        // 1. Находим старый документ
-        $oldDoc = $this->findAndVerify($oldDocId, $uploader);
+        $oldDoc = $this->findAndCheckAccess($oldDocId, $uploader);
 
-        // 2. Загружаем новый файл как обычно
-        $newDoc = $this->uploadFile($file, $uploader, $oldDoc->getDocType());
+        if (!$oldDoc->getFile()) {
+             // Если старого файла нет, просто загружаем новый как обычный файл
+             $newUploadedFile = $this->uploadService->uploadFile(
+                $file,
+                $uploader,
+                FileContext::DOCUMENT,
+                null,
+                "Замена документа (предыдущий файл отсутствовал)"
+            );
+        } else {
+            // 1. Заменяем файл через UploadService
+            $newUploadedFile = $this->uploadService->replaceFile(
+                $oldDoc->getFile(),
+                $file
+            );
+        }
 
-        // 3. Связываем их и архивируем старый
+        // 2. Создаём новый Document
+        $newDoc = new Document();
+        $newDoc->setDocType($oldDoc->getDocType());
+        $newDoc->setFile($newUploadedFile);
+        $newDoc->setUploaderUser($uploader);
+        $newDoc->setCompany($oldDoc->getCompany());
+        $newDoc->setApplication($oldDoc->getApplication());
+        $newDoc->setMessage($oldDoc->getMessage());
+        $newDoc->setStatus(DocumentStatus::PENDING);
         $newDoc->setParentDocument($oldDoc);
         $newDoc->setVersionComment($reason);
 
-        // Переносим привязки (чтобы новый документ встал на место старого)
-        $newDoc->setCompany($oldDoc->getCompany());
-        $newDoc->setApplication($oldDoc->getApplication());
-
+        // 3. Помечаем старый как архивный
         $oldDoc->setArchived(true);
 
-        $this->documentRepository->save($oldDoc);
-        $this->documentRepository->save($newDoc, true);
+        $this->entityManager->persist($newDoc);
+        $this->entityManager->flush();
+
+        $this->logger->info('Document replaced', [
+            'old_doc_id' => $oldDocId,
+            'new_doc_id' => $newDoc->getId(),
+            'reason' => $reason
+        ]);
 
         return $newDoc;
+    }
+
+    /**
+     * Удаление документа. Делегируем удаление файла в UploadService.
+     */
+    public function deleteDocument(int $documentId, User $user): void
+    {
+        $document = $this->findAndCheckAccess($documentId, $user);
+
+        if ($document->getFile()) {
+            // Удаляем файл через UploadService
+            $this->uploadService->deleteFile($document->getFile());
+        }
+
+        // Удаляем запись документа
+        $this->documentRepository->remove($document, true);
+
+        $this->logger->info('Document deleted', [
+            'document_id' => $documentId,
+            'user_id' => $user->getId()
+        ]);
+    }
+
+    /**
+     * Одобрить документ (модерация).
+     */
+    public function approveDocument(int $documentId, User $moderator): Document
+    {
+        $document = $this->documentRepository->find($documentId);
+
+        if (!$document) {
+            throw new DocumentNotFoundException();
+        }
+
+        $document->setStatus('approved');
+        $this->documentRepository->save($document, true);
+
+        $this->logger->info('Document approved', [
+            'document_id' => $documentId,
+            'moderator_id' => $moderator->getId()
+        ]);
+
+        return $document;
+    }
+
+    /**
+     * Отклонить документ (модерация).
+     */
+    public function rejectDocument(int $documentId, User $moderator, string $reason): Document
+    {
+        $document = $this->documentRepository->find($documentId);
+
+        if (!$document) {
+            throw new DocumentNotFoundException();
+        }
+
+        $document->setStatus('rejected');
+        $document->setRejectionReason($reason);
+        $this->documentRepository->save($document, true);
+
+        $this->logger->info('Document rejected', [
+            'document_id' => $documentId,
+            'moderator_id' => $moderator->getId(),
+            'reason' => $reason
+        ]);
+
+        return $document;
+    }
+
+    /**
+     * Получить документы на модерации.
+     */
+    public function getPendingDocuments(): array
+    {
+        return $this->documentRepository->findBy(['status' => 'pending']);
     }
 }

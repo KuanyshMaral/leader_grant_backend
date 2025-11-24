@@ -9,6 +9,8 @@ use Symfony\Component\Serializer\Annotation\Groups;
 
 #[ORM\Entity(repositoryClass: CompanyRepository::class)]
 #[ORM\Table(name: '`companies`')]
+#[ORM\Index(name: 'idx_user', columns: ['user_id'])]
+#[ORM\Index(name: 'idx_inn', columns: ['inn'])]
 class Company {
 
     #[ORM\Id]

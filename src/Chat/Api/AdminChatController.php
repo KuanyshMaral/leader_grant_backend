@@ -29,11 +29,64 @@ class AdminChatController extends AbstractController
     #[Route('/pending', methods: ['GET'])]
     public function getPendingMessages(): JsonResponse
     {
-        // 1. Используем новый метод репозитория
-        $messages = $this->messageRepository->findPendingModeration();
+        // Используем метод с EAGER LOADING чтобы получить application и sender_user
+        $messages = $this->messageRepository->findPendingWithRelations();
 
-        // 2. Возвращаем "чистый" JSON (мы настроили #[Groups('chat:read')] в Message.php)
-        return $this->json($messages, 200, [], ['groups' => 'chat:read']);
+        // Вручную форматируем ответ для фронтенда
+        $result = [];
+        foreach ($messages as $msg) {
+            $result[] = [
+                'id' => $msg->getId(),
+                'body' => $msg->getBody(),
+                'sender_user' => [
+                    'id' => $msg->getSenderUser()->getId(),
+                    'fio' => $msg->getSenderUser()->getFio(),
+                    'role' => $msg->getSenderUser()->getRole(),
+                ],
+                'application' => [
+                    'id' => $msg->getApplication()->getId(),
+                ],
+                'moderation_status' => $msg->getModerationStatus()->value,
+                'read_status' => $msg->isReadStatus(),
+                'created_at' => $msg->getCreatedAt()->format('c'),
+            ];
+        }
+
+        return $this->json($result);
+    }
+
+    /**
+     * [Админ] Получает сообщения конкретной заявки для модерации.
+     */
+    #[Route('/applications/{applicationId}/messages', methods: ['GET'])]
+    public function getApplicationMessages(int $applicationId): JsonResponse
+    {
+        // Получаем все pending сообщения с relations
+        $messages = $this->messageRepository->findPendingWithRelations();
+        
+        // Фильтруем по application ID
+        $result = [];
+        foreach ($messages as $msg) {
+            if ($msg->getApplication()->getId() === $applicationId) {
+                $result[] = [
+                    'id' => $msg->getId(),
+                    'body' => $msg->getBody(),
+                    'sender_user' => [
+                        'id' => $msg->getSenderUser()->getId(),
+                        'fio' => $msg->getSenderUser()->getFio(),
+                        'role' => $msg->getSenderUser()->getRole(),
+                    ],
+                    'application' => [
+                        'id' => $msg->getApplication()->getId(),
+                    ],
+                    'moderation_status' => $msg->getModerationStatus()->value,
+                    'read_status' => $msg->isReadStatus(),
+                    'created_at' => $msg->getCreatedAt()->format('c'),
+                ];
+            }
+        }
+        
+        return $this->json($result);
     }
 
     /**
@@ -59,5 +112,35 @@ class AdminChatController extends AbstractController
         $message = $this->chatService->moderateMessage($id, 'rejected', $admin);
 
         return $this->json($message, 200, [], ['groups' => 'chat:read']);
+    }
+    /**
+     * [Админ] Получает список заявок, где есть сообщения на модерации.
+     */
+    #[Route('/applications', methods: ['GET'])]
+    public function getModerationApplications(): JsonResponse
+    {
+        $messages = $this->messageRepository->findPendingWithRelations();
+
+        $apps = [];
+        foreach ($messages as $msg) {
+            $app = $msg->getApplication();
+            $appId = $app->getId();
+
+            if (!isset($apps[$appId])) {
+                $apps[$appId] = [
+                    'id' => $appId,
+                    'client_name' => $app->getClientUser()->getFio(), // Assumes ClientUser exists
+                    'product_name' => $app->getProductType(),
+                    'pending_count' => 0,
+                    'last_pending_at' => $msg->getCreatedAt()->format('c'),
+                ];
+            }
+
+            $apps[$appId]['pending_count']++;
+            // Update last pending time if this message is newer (though query is ASC, so last one is newest? No, query is ASC, so last iteration is newest)
+            $apps[$appId]['last_pending_at'] = $msg->getCreatedAt()->format('c');
+        }
+
+        return $this->json(array_values($apps));
     }
 }

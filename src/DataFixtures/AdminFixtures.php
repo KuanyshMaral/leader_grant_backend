@@ -4,6 +4,8 @@
 namespace App\DataFixtures;
 
 use App\User\Entity\User;
+use App\User\Enum\UserRole;
+use App\User\Enum\UserStatus;
 use Doctrine\Bundle\FixturesBundle\Fixture;
 use Doctrine\Persistence\ObjectManager;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
@@ -29,8 +31,8 @@ class AdminFixtures extends Fixture
             $admin->setPhone('000000000');
 
             // 4. Устанавливаем роль и статус (Админу не нужна аккредитация)
-            $admin->setRole('admin');
-            $admin->setStatus('active');
+            $admin->setRole(UserRole::ADMIN);
+            $admin->setStatus(UserStatus::ACTIVE);
 
             // 5. Хешируем пароль (вместо 'admin' впишите свой сложный пароль)
             $hashedPassword = $this->passwordHasher->hashPassword(

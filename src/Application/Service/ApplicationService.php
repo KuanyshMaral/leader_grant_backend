@@ -39,41 +39,75 @@ class ApplicationService
      */
     public function createApplications(CreateApplicationDTO $dto, User $creator): array
     {
-        $client = $this->userRepository->find($dto->client_user_id);
-        if (!$client) {
-            throw new UserNotFoundException();
+        $this->logger->info('Creating application(s)', [
+            'client_user_id' => $dto->client_user_id,
+            'agent_user_id' => $dto->agent_user_id,
+            'product_type' => $dto->product_type,
+            'amount' => $dto->amount,
+            'term_days' => $dto->term_days,
+            'bank_ids_count' => count($dto->bank_ids ?? []),
+            'creator_id' => $creator->getId(),
+            'creator_role' => $creator->getRole()
+        ]);
+
+        try {
+            $client = $this->userRepository->find($dto->client_user_id);
+            if (!$client) {
+                $this->logger->error('Client not found for application creation', [
+                    'client_user_id' => $dto->client_user_id
+                ]);
+                throw new UserNotFoundException();
+            }
+            $agent = ($creator->getRole() === 'agent') ? $creator : null;
+
+            $createdApplications = [];
+
+            // 1. Создаем ОСНОВНЫЕ заявки (например, БГ)
+            $mainApps = $this->createApplicationsBatch($dto, $client, $agent);
+            $createdApplications = array_merge($createdApplications, $mainApps);
+
+            // 2. ЛОГИКА КРОСС-ПРОДАЖИ: Если это БГ и стоит галочка "Нужен кредит"
+            // (Предполагается, что в ProductDataDTO есть поле need_credit)
+            if ($dto->product_type === 'bank_guarantee' && ($dto->product_data->need_credit ?? false)) {
+                // Создаем дубликаты заявок, но с типом 'credit'
+                // Клонируем DTO и меняем тип
+                $creditDto = clone $dto;
+                $creditDto->product_type = 'credit'; // Меняем тип на Кредит
+
+                $creditApps = $this->createApplicationsBatch($creditDto, $client, $agent);
+                $createdApplications = array_merge($createdApplications, $creditApps);
+
+                $this->logger->info('Автоматически созданы заявки на Кредит (кросс-продажа)', ['count' => count($creditApps)]);
+            }
+
+            $this->entityManager->flush();
+
+            // Уведомление админа
+            $appIds = array_map(fn($app) => $app->getId(), $createdApplications);
+            if (!empty($appIds)) {
+                $this->bus->dispatch(new ApplicationCreatedEvent($appIds, $client->getId()));
+            }
+
+            $this->logger->info('Application(s) created successfully', [
+                'count' => count($createdApplications),
+                'application_ids' => $appIds,
+                'client_id' => $client->getId(),
+                'agent_id' => $agent?->getId()
+            ]);
+
+            return $createdApplications;
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to create application(s)', [
+                'error' => $e->getMessage(),
+                'dto' => [
+                    'client_user_id' => $dto->client_user_id,
+                    'product_type' => $dto->product_type,
+                    'amount' => $dto->amount
+                ],
+                'trace' => $e->getTraceAsString()
+            ]);
+            throw $e;
         }
-        $agent = ($creator->getRole() === 'agent') ? $creator : null;
-
-        $createdApplications = [];
-
-        // 1. Создаем ОСНОВНЫЕ заявки (например, БГ)
-        $mainApps = $this->createApplicationsBatch($dto, $client, $agent);
-        $createdApplications = array_merge($createdApplications, $mainApps);
-
-        // 2. ЛОГИКА КРОСС-ПРОДАЖИ: Если это БГ и стоит галочка "Нужен кредит"
-        // (Предполагается, что в ProductDataDTO есть поле need_credit)
-        if ($dto->product_type === 'bank_guarantee' && ($dto->product_data->need_credit ?? false)) {
-            // Создаем дубликаты заявок, но с типом 'credit'
-            // Клонируем DTO и меняем тип
-            $creditDto = clone $dto;
-            $creditDto->product_type = 'credit'; // Меняем тип на Кредит
-
-            $creditApps = $this->createApplicationsBatch($creditDto, $client, $agent);
-            $createdApplications = array_merge($createdApplications, $creditApps);
-
-            $this->logger->info('Автоматически созданы заявки на Кредит (кросс-продажа)', ['count' => count($creditApps)]);
-        }
-
-        $this->entityManager->flush();
-
-        // Уведомление админа
-        $appIds = array_map(fn($app) => $app->getId(), $createdApplications);
-        if (!empty($appIds)) {
-            $this->bus->dispatch(new ApplicationCreatedEvent($appIds, $client->getId()));
-        }
-
-        return $createdApplications;
     }
 
     /**
@@ -107,9 +141,19 @@ class ApplicationService
 
     public function getApplicationForUser(int $applicationId, User $user): Application
     {
+        $this->logger->debug('Fetching application for user', [
+            'application_id' => $applicationId,
+            'user_id' => $user->getId(),
+            'user_role' => $user->getRole()
+        ]);
+
         $application = $this->applicationRepository->find($applicationId);
 
         if (!$application) {
+            $this->logger->warning('Application not found', [
+                'application_id' => $applicationId,
+                'user_id' => $user->getId()
+            ]);
             throw new ApplicationNotFoundException();
         }
 
@@ -117,84 +161,79 @@ class ApplicationService
             return $application;
         }
 
+        $this->logger->warning('Application access denied', [
+            'application_id' => $applicationId,
+            'user_id' => $user->getId(),
+            'user_role' => $user->getRole()
+        ]);
+
         throw new ApplicationAccessDeniedException();
     }
 
     private function canUserView(User $user, Application $application): bool
     {
-        $role = $user->getRole();
-
-        if ($role === 'admin') return true;
-        if ($role === 'client' && $application->getClientUser()->getId() === $user->getId()) return true;
-        if ($role === 'agent' && $application->getAgentUser()?->getId() === $user->getId()) return true;
-        if ($role === 'partner' && $application->getBank()->getId() === $user->getCompany()?->getId()) return true;
-
-        return false;
+        return $user->getRole()->canAccessApplication($application, $user);
     }
 
     /**
-     * [ОБНОВЛЕНО] Получает список заявок с ФИЛЬТРАЦИЕЙ.
-     * Добавлены аргументы $statusFilter и $productFilter
+     * [ОБНОВЛЕНО] Получает список заявок с РАСШИРЕННОЙ ФИЛЬТРАЦИЕЙ.
      */
-    public function listForUser(
-        User $user,
-        PaginationRequestDTO $pagination,
-        ?string $statusFilter = null, // 'active', 'rejected', 'archive'
-        ?string $productFilter = null // 'bank_guarantee', 'credit'...
-    ): array
+    public function listForUser(User $user, PaginationRequestDTO $pagination, array $filters = []): array
     {
-        $qb = $this->applicationRepository->createQueryBuilder('a');
-
-        // 1. Фильтр по Роли
-        $role = $user->getRole();
-        if ($role === 'client') {
-            $qb->andWhere('a.client_user = :user')->setParameter('user', $user);
-        } elseif ($role === 'agent') {
-            $qb->andWhere('a.agent_user = :user')->setParameter('user', $user);
-        } elseif ($role === 'partner') {
-            // Используем прямую связь User -> Bank
-            if ($user->getBank()) {
-                $qb->andWhere('a.bank = :bankId')->setParameter('bankId', $user->getBank()->getId());
-            } else {
-                $qb->andWhere('1 = 0');
-            }
-        }
-
-        // 2. Фильтр по Статусу (Табы в UI)
-        if ($statusFilter) {
-            if ($statusFilter === 'rejected') {
-                $qb->andWhere('a.status = :st')->setParameter('st', 'rejected');
-            } elseif ($statusFilter === 'archive') {
-                // Архивные - это завершенные или архивированные
-                $qb->andWhere('a.status IN (:sts)')->setParameter('sts', ['completed', 'archived']);
-            } else {
-                // 'active' (Активные) - все, кроме отказа, завершенных и архива
-                $qb->andWhere('a.status NOT IN (:sts)')->setParameter('sts', ['rejected', 'completed', 'archived']);
-            }
-        }
-
-        // 3. Фильтр по Продукту
-        if ($productFilter) {
-            $qb->andWhere('a.product_type = :pt')->setParameter('pt', $productFilter);
-        }
-
-        // Подсчет total
-        $countQb = clone $qb;
-        $total = $countQb->select('count(a.id)')->getQuery()->getSingleScalarResult();
-
-        // Пагинация и сортировка
-        $qb->orderBy('a.updated_at', 'DESC')
-            ->setFirstResult(($pagination->page - 1) * $pagination->limit)
-            ->setMaxResults($pagination->limit);
-
-        $applications = $qb->getQuery()->getResult();
-
-        return [
-            'data' => $applications,
-            'total' => (int) $total,
+        $this->logger->debug('Listing applications for user', [
+            'user_id' => $user->getId(),
+            'user_role' => $user->getRole(),
             'page' => $pagination->page,
             'limit' => $pagination->limit,
-        ];
+            'filters' => $filters
+        ]);
+
+        try {
+            $qb = $this->applicationRepository->createQueryBuilder('a');
+            $role = $user->getRole()->value; // Get string value from enum
+            if ($role === 'client') {
+                $qb->andWhere('a.client_user = :user')->setParameter('user', $user);
+            } elseif ($role === 'agent') {
+                $qb->andWhere('a.agent_user = :user')->setParameter('user', $user);
+            } elseif ($role === 'partner') {
+                if ($user->getBank()) $qb->andWhere('a.bank = :bankId')->setParameter('bankId', $user->getBank()->getId());
+                else $qb->andWhere('1 = 0');
+            }
+            if (!empty($filters['status'])) {
+                if ($filters['status'] === 'rejected') $qb->andWhere('a.status = :st')->setParameter('st', 'rejected');
+                elseif ($filters['status'] === 'archive') $qb->andWhere('a.status IN (:sts)')->setParameter('sts', ['completed', 'archived']);
+                else $qb->andWhere('a.status NOT IN (:sts)')->setParameter('sts', ['rejected', 'completed', 'archived']);
+            }
+            if (!empty($filters['product'])) $qb->andWhere('a.product_type = :pt')->setParameter('pt', $filters['product']);
+            if (!empty($filters['bank_id'])) $qb->andWhere('a.bank = :bid')->setParameter('bid', $filters['bank_id']);
+            if (!empty($filters['agent_id'])) $qb->andWhere('a.agent_user = :aid')->setParameter('aid', $filters['agent_id']);
+            if (!empty($filters['client_id'])) $qb->andWhere('a.client_user = :cid')->setParameter('cid', $filters['client_id']);
+            if (!empty($filters['date_from'])) $qb->andWhere('a.created_at >= :df')->setParameter('df', new \DateTime($filters['date_from']));
+            if (!empty($filters['date_to'])) $qb->andWhere('a.created_at <= :dt')->setParameter('dt', new \DateTime($filters['date_to']));
+            if (!empty($filters['amount_min'])) $qb->andWhere('a.amount >= :amin')->setParameter('amin', $filters['amount_min']);
+            if (!empty($filters['amount_max'])) $qb->andWhere('a.amount <= :amax')->setParameter('amax', $filters['amount_max']);
+            if (!empty($filters['search'])) $qb->andWhere('a.id = :search OR a.product_type LIKE :searchLike')->setParameter('search', $filters['search'])->setParameter('searchLike', '%' . $filters['search'] . '%');
+            $countQb = clone $qb;
+            $total = $countQb->select('count(a.id)')->getQuery()->getSingleScalarResult();
+            $qb->orderBy('a.updated_at', 'DESC')->setFirstResult(($pagination->page - 1) * $pagination->limit)->setMaxResults($pagination->limit);
+            $applications = $qb->getQuery()->getResult();
+            
+            $this->logger->info('Applications listed successfully', [
+                'user_id' => $user->getId(),
+                'total' => $total,
+                'returned' => count($applications),
+                'page' => $pagination->page
+            ]);
+
+            return ['data' => $applications, 'total' => (int) $total, 'page' => $pagination->page, 'limit' => $pagination->limit];
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to list applications', [
+                'user_id' => $user->getId(),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            throw $e;
+        }
     }
 
     /**
@@ -248,6 +287,18 @@ class ApplicationService
         }
 
         $this->applicationRepository->save($application, true);
+
+        // AUTO-LOG: Сохраняем изменение статуса в историю
+        $statusHistory = new \App\Application\Entity\ApplicationStatusHistory();
+        $statusHistory->setApplication($application);
+        $statusHistory->setChangedBy($updater);
+        $statusHistory->setOldStatus($oldStatus);
+        $statusHistory->setNewStatus($dto->status);
+        if ($dto->rejection_reason) {
+            $statusHistory->setComment($dto->rejection_reason);
+        }
+        $this->entityManager->persist($statusHistory);
+        $this->entityManager->flush();
 
         $this->logger->info('Статус заявки обновлен', [
             'app_id' => $application->getId(),

@@ -3,7 +3,7 @@
 
 namespace App\User\Service;
 
-use App\User\DTO\AddClientDTO; // <--- ВОТ ЭТОЙ СТРОКИ НЕ ХВАТАЕТ ИЛИ ОНА БЫЛА УДАЛЕНА
+use App\User\DTO\AddClientDTO;
 use App\User\Entity\ClientAgentLink;
 use App\User\Entity\Company;
 use App\User\Entity\User;
@@ -12,6 +12,7 @@ use App\User\Repository\CompanyRepository;
 use App\User\Repository\UserRepository;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use App\Document\Repository\DocumentRepository;
+use Psr\Log\LoggerInterface;
 
 class AgentService
 {
@@ -20,11 +21,23 @@ class AgentService
         private readonly UserRepository $userRepository,
         private readonly CompanyRepository $companyRepository,
         private readonly UserPasswordHasherInterface $passwordHasher,
-        private readonly DocumentRepository $documentRepository
+        private readonly DocumentRepository $documentRepository,
+        private readonly \App\Document\Service\DocumentService $documentService,
+        private readonly LoggerInterface $logger
     ) {}
 
+    // ... (existing methods)
+
+
+    /**
+     * Получить список моих клиентов.
+     */
     public function getMyClients(User $agent): array
     {
+        $this->logger->debug('Fetching clients for agent', [
+            'agent_id' => $agent->getId()
+        ]);
+        
         $links = $this->linkRepository->findClientsByAgent($agent->getId());
         $result = [];
         foreach ($links as $link) {
@@ -40,6 +53,12 @@ class AgentService
                 'inn' => $company ? $company->getInn() : '-',
             ];
         }
+        
+        $this->logger->info('Clients fetched for agent', [
+            'agent_id' => $agent->getId(),
+            'count' => count($result)
+        ]);
+        
         return $result;
     }
 
@@ -48,6 +67,11 @@ class AgentService
      */
     public function addClient(User $agent, AddClientDTO $dto): void
     {
+        $this->logger->info('Agent adding new client', [
+            'agent_id' => $agent->getId(),
+            'client_email' => $dto->email
+        ]);
+        
         // 1. Ищем, есть ли уже такой пользователь
         $client = $this->userRepository->findOneBy(['email' => $dto->email]);
 
@@ -65,6 +89,11 @@ class AgentService
             $client->setPasswordHash($this->passwordHasher->hashPassword($client, $randomPass));
 
             $this->userRepository->save($client); // Сохраняем
+            
+            $this->logger->info('New client user created', [
+                'client_id' => $client->getId(),
+                'email' => $dto->email
+            ]);
         }
 
         // 3. Если передан ИНН, создаем компанию
@@ -79,6 +108,11 @@ class AgentService
             $company->setCeoFio('-');
             $company->setTaxSystem('OSN');
             $this->companyRepository->save($company);
+            
+            $this->logger->info('Company created for client', [
+                'client_id' => $client->getId(),
+                'inn' => $dto->inn
+            ]);
         }
 
         // 4. Создаем СВЯЗЬ (Агент <-> Клиент)
@@ -93,6 +127,16 @@ class AgentService
             $link->setClientUser($client);
             $link->setStatus('linked');
             $this->linkRepository->save($link, true); // flush
+            
+            $this->logger->info('Client linked to agent', [
+                'agent_id' => $agent->getId(),
+                'client_id' => $client->getId()
+            ]);
+        } else {
+            $this->logger->debug('Client already linked to agent', [
+                'agent_id' => $agent->getId(),
+                'client_id' => $client->getId()
+            ]);
         }
     }
 
@@ -120,8 +164,26 @@ class AgentService
     public function getClientDocuments(User $agent, int $clientId): array
     {
         $client = $this->getClient($agent, $clientId); // Проверка доступа
-        // Используем репозиторий документов (нужно добавить его в __construct)
-        // (Предполагается, что вы добавили DocumentRepository в конструктор этого сервиса)
-        return $this->documentRepository->findAllByUser($client->getId());
+        return $this->documentRepository->findAllByClient($client);
+    }
+
+    /**
+     * Агент загружает документ для клиента.
+     */
+    public function uploadClientDocument(User $agent, int $clientId, \Symfony\Component\HttpFoundation\File\UploadedFile $file, string $docType): \App\Document\Entity\Document
+    {
+        $client = $this->getClient($agent, $clientId);
+        
+        // 1. Загружаем файл (как обычно)
+        $document = $this->documentService->uploadFile($file, $agent, $docType);
+
+        // 2. Привязываем к компании клиента
+        if ($client->getCompany()) {
+            $document->setCompany($client->getCompany());
+        }
+
+        $this->documentRepository->save($document, true);
+
+        return $document;
     }
 }

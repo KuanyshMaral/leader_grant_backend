@@ -79,6 +79,33 @@ class AgentController extends AbstractController
         }
     }
 
+    /**
+     * Загрузить документ для клиента.
+     */
+    #[Route('/clients/{id}/documents', methods: ['POST'])]
+    public function uploadClientDocument(
+        int $id,
+        \Symfony\Component\HttpFoundation\Request $request,
+        #[CurrentUser] User $agent
+    ): JsonResponse {
+        $file = $request->files->get('file');
+        $docType = $request->request->get('docType');
+
+        if (!$file || !$docType) {
+            return $this->json(['error' => 'File and docType are required'], 400);
+        }
+
+        try {
+            $document = $this->agentService->uploadClientDocument($agent, $id, $file, $docType);
+            return $this->json([
+                'id' => $document->getId(),
+                'status' => 'uploaded'
+            ], 201);
+        } catch (\Exception $e) {
+            return $this->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
     // --- СКЕЛЕТЫ ---
 
     /**
@@ -98,8 +125,25 @@ class AgentController extends AbstractController
     #[Route('/clients/{id}/company', methods: ['GET'])]
     public function getClientCompany(int $id): JsonResponse
     {
-        // Заглушка: возвращаем то, что есть в User.
-        // В будущем здесь будет полная анкета.
         return $this->json(['status' => 'ok']);
+    }
+
+    #[Route('/clients/{id}/interactions', methods: ['GET'])]
+    public function getClientInteractions(int $id, #[CurrentUser] User $agent, \App\Agent\Repository\AgentClientInteractionRepository $repo): JsonResponse
+    {
+        $client = $this->userRepository->find($id);
+        if (!$client || $client->getReferrerAgent()?->getId() !== $agent->getId()) return $this->json(['error' => 'Клиент не найден'], 404);
+        return $this->json($repo->findByAgentAndClient($agent, $client), 200, [], ['groups' => 'interaction:read']);
+    }
+
+    #[Route('/clients/{id}/interactions', methods: ['POST'])]
+    public function addClientInteraction(int $id, #[MapRequestPayload] \App\Agent\DTO\AddInteractionDTO $dto, #[CurrentUser] User $agent, \App\Agent\Repository\AgentClientInteractionRepository $repo): JsonResponse
+    {
+        $client = $this->userRepository->find($id);
+        if (!$client || $client->getReferrerAgent()?->getId() !== $agent->getId()) return $this->json(['error' => 'Клиент не найден'], 404);
+        $interaction = new \App\Agent\Entity\AgentClientInteraction();
+        $interaction->setAgent($agent)->setClient($client)->setType($dto->type)->setNotes($dto->notes)->setInteractionDate(new \DateTimeImmutable($dto->interactionDate));
+        $repo->save($interaction, true);
+        return $this->json(['message' => 'Взаимодействие добавлено', 'id' => $interaction->getId()], 201);
     }
 }

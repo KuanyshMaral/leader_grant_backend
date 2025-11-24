@@ -1,0 +1,5 @@
+# config/packages/scheduler.yaml
+framework:
+    scheduler:
+        # Включение Symfony Scheduler
+        enabled: true

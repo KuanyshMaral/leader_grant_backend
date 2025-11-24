@@ -61,4 +61,48 @@ class ChatController extends AbstractController
         // 201 Created
         return $this->json($message, 201, [], ['groups' => 'chat:read']);
     }
+
+    /**
+     * Редактировать своё сообщение
+     * 
+     * PATCH /api/messages/{id}
+     */
+    #[Route('/messages/{id}', methods: ['PATCH'])]
+    public function updateMessage(
+        int $id,
+        #[CurrentUser] User $user,
+        \Symfony\Component\HttpFoundation\Request $request
+    ): JsonResponse {
+        $data = json_decode($request->getContent(), true);
+        $newBody = $data['body'] ?? null;
+
+        if (!$newBody) {
+            return $this->json(['error' => 'Поле body обязательно'], 400);
+        }
+
+        try {
+            $message = $this->chatService->updateMessage($id, $newBody, $user);
+            return $this->json($message, 200, [], ['groups' => 'chat:read']);
+        } catch (\Exception $e) {
+            return $this->json(['error' => $e->getMessage()], 403);
+        }
+    }
+
+    /**
+     * Удалить своё сообщение
+     * 
+     * DELETE /api/messages/{id}
+     */
+    #[Route('/messages/{id}', methods: ['DELETE'])]
+    public function deleteMessage(
+        int $id,
+        #[CurrentUser] User $user
+    ): JsonResponse {
+        try {
+            $this->chatService->deleteMessage($id, $user);
+            return $this->json(['message' => 'Сообщение удалено'], 200);
+        } catch (\Exception $e) {
+            return $this->json(['error' => $e->getMessage()], 403);
+        }
+    }
 }

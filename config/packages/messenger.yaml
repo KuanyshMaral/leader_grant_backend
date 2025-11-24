@@ -11,12 +11,18 @@ framework:
 
             # 'async' - это имя нашей асинхронной очереди
             async: '%env(MESSENGER_TRANSPORT_DSN)%'
+            
+            # Scheduler transport для периодических задач
+            scheduler: 'doctrine://default?queue_name=scheduler'
 
         routing:
             # Говорим, что "События" из App\User\Event\*
             # должны отправляться в очередь 'async' (а не выполняться сразу)
             'App\User\Event\UserRegisteredEvent': async
             'App\User\Event\AccreditationSubmittedEvent': async
+            
+            # Cleanup tasks в scheduler
+            'App\Upload\Message\CleanupTemporaryUploadsMessage': scheduler
 
 # when@test:
 #    framework:

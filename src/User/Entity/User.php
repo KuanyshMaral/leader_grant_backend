@@ -6,14 +6,25 @@ namespace App\User\Entity;
 // 1. ПОДКЛЮЧАЕМ АТРИБУТЫ DOCTRINE
 use Doctrine\ORM\Mapping as ORM;
 use App\User\Repository\UserRepository;
+use App\User\Enum\UserRole;
+use App\User\Enum\UserStatus;
 use App\Bank\Entity\Bank;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Serializer\Annotation\Groups;
+use Symfony\Component\Serializer\Annotation\SerializedName;
 
 
 #[ORM\Entity(repositoryClass: UserRepository::class)]
-#[ORM\Table(name: '`users`')] // Кавычки нужны, т.к. "user" - ключевое слово в SQL
+#[ORM\Table(name: '`users`')]
+#[ORM\Index(name: 'idx_email', columns: ['email'])]
+#[ORM\Index(name: 'idx_role', columns: ['role'])]
+#[ORM\Index(name: 'idx_user_status', columns: ['status'])]
+#[ORM\Index(name: 'idx_user_accreditation', columns: ['accreditation_status'])]
+#[ORM\Index(name: 'idx_referrer_agent', columns: ['referrer_agent_id'])]
+#[ORM\Index(name: 'idx_personal_manager', columns: ['personal_manager_id'])]
+#[ORM\Index(name: 'idx_user_bank', columns: ['bank_id'])]
+#[ORM\Index(name: 'idx_role_status', columns: ['role', 'status'])]
 class User implements UserInterface, PasswordAuthenticatedUserInterface {
 
     // 3. ОПИСЫВАЕМ КАЖДОЕ ПОЛЕ
@@ -31,13 +42,24 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface {
     #[ORM\Column(type: 'string', length: 255)]
     private string $password_hash;
 
-    #[ORM\Column(type: 'string', length: 20)]
+    #[ORM\Column(type: 'string', enumType: UserRole::class)]
     #[Groups(['app:read', 'chat:read'])]
-    private string $role;
+    private UserRole $role;
 
-    #[ORM\Column(type: 'string', length: 30)]
+    #[ORM\Column(type: 'string', enumType: UserStatus::class)]
     #[Groups(['app:read'])]
-    private string $status;
+    private UserStatus $status = UserStatus::PENDING_REVIEW;
+
+    // Поля для аккредитации (модерации пользователей админом)
+    #[ORM\Column(type: 'string', length: 50, options: ['default' => 'pending'])]
+    #[Groups(['app:read'])]
+    private string $accreditationStatus = 'pending'; //pending, approved, rejected
+
+    #[ORM\Column(type: 'text', nullable: true)]
+    private ?string $rejectionReason = null;
+
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $accreditationDate = null;
 
     #[ORM\Column(type: 'string', length: 255)]
     #[Groups(['app:read', 'chat:read'])]
@@ -92,7 +114,12 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface {
 
     #[ORM\Column(type: 'string', length: 255, nullable: true)]
     #[Groups(['app:read', 'user:read'])]
+    #[SerializedName('avatar')]
     private ?string $avatarPath = null; // Ссылка на фото
+
+    #[ORM\Column(type: 'decimal', precision: 5, scale: 2, nullable: true)]
+    #[Groups(['app:read', 'user:read'])]
+    private ?string $commissionRate = null; // Процент комиссии для агентов (например, 2.50)
 
     public function __construct() {
         $this->created_at = new \DateTimeImmutable();
@@ -105,11 +132,11 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface {
     public function getPassword(): string { return $this->password_hash; }
     public function setPasswordHash(string $password_hash): void { $this->password_hash = $password_hash; }
 
-    public function getRole(): string { return $this->role; }
-    public function setRole(string $role): void { $this->role = $role; }
+    public function getRole(): UserRole { return $this->role; }
+    public function setRole(UserRole $role): void { $this->role = $role; }
 
-    public function getStatus(): string { return $this->status; }
-    public function setStatus(string $status): void { $this->status = $status; }
+    public function getStatus(): UserStatus { return $this->status; }
+    public function setStatus(UserStatus $status): void { $this->status = $status; }
 
     public function getFio(): string { return $this->fio; }
     public function setFio(string $fio): void { $this->fio = $fio; }
@@ -138,19 +165,37 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface {
     public function getAvatarPath(): ?string { return $this->avatarPath; }
     public function setAvatarPath(?string $avatarPath): void { $this->avatarPath = $avatarPath; }
 
+    // Alias для API совместимости
+    public function getAvatar(): ?string { return $this->avatarPath; }
+    public function setAvatar(?string $avatar): void { $this->avatarPath = $avatar; }
+
     public function getCreatedAt(): \DateTimeImmutable { return $this->created_at; }
 
     // --- ИНТЕРФЕЙСЫ SECURITY ---
 
     public function getRoles(): array {
-        $roles = ['ROLE_' . strtoupper($this->role)];
+        $roles = ['ROLE_' . strtoupper($this->role->value)];
         $roles[] = 'ROLE_USER';
         return array_unique($roles);
     }
 
+
     public function getUserIdentifier(): string {
         return $this->email;
     }
+
+    // Accreditation methods
+    public function getAccreditationStatus(): string { return $this->accreditationStatus; }
+    public function setAccreditationStatus(string $accreditationStatus): void { $this->accreditationStatus = $accreditationStatus; }
+
+    public function getRejectionReason(): ?string { return $this->rejectionReason; }
+    public function setRejectionReason(?string $rejectionReason): void { $this->rejectionReason = $rejectionReason; }
+
+    public function getAccreditationDate(): ?\DateTimeImmutable { return $this->accreditationDate; }
+    public function setAccreditationDate(?\DateTimeImmutable $accreditationDate): void { $this->accreditationDate = $accreditationDate; }
+
+    public function getCommissionRate(): ?string { return $this->commissionRate; }
+    public function setCommissionRate(?string $commissionRate): void { $this->commissionRate = $commissionRate; }
 
     public function eraseCredentials(): void {}
 }

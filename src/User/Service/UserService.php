@@ -37,6 +37,21 @@ class UserService
         $company = $user->getCompany() ?? new Company();
         $company->setUser($user);
 
+        // Проверка уникальности ИНН
+        if ($dto->inn) {
+            $existingCompany = $this->companyRepository->findOneBy(['inn' => $dto->inn]);
+            
+            // Если создаем новую компанию (у юзера еще нет)
+            if ($existingCompany && $user->getCompany() === null) {
+                throw new \App\User\Exception\CompanyAlreadyExistsException('Компания с таким ИНН уже зарегистрирована.');
+            }
+
+            // Если обновляем существующую
+            if ($existingCompany && $user->getCompany() !== null && $existingCompany->getId() !== $user->getCompany()->getId()) {
+                throw new \App\User\Exception\CompanyAlreadyExistsException('Компания с таким ИНН уже зарегистрирована.');
+            }
+        }
+
         // Простые поля
         $company->setName($dto->name);
         $company->setFullName($dto->full_name);

@@ -1,9 +1,15 @@
 # config/packages/flysystem.yaml
 flysystem:
     storages:
+        # 1. Приватное хранилище (для документов) - остается как было
         default.storage:
             adapter: 'local'
             options:
-                # Храним файлы ВНЕ папки public, чтобы их нельзя было открыть по прямой ссылке
-                # Это критично для паспортов и уставных документов!
                 directory: '%kernel.project_dir%/var/storage'
+
+        # 2. Публичное хранилище (для аватарок)
+        public.storage:
+            adapter: 'local'
+            options:
+                # Пишем прямо в public, чтобы Nginx мог отдать файл
+                directory: '%kernel.project_dir%/public/uploads'
